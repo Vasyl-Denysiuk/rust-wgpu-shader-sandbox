@@ -1,6 +1,12 @@
 [package]
-name = "app"
+name = "egui-wgpu-demo"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bytemuck = "1.24.0"
+eframe = { version = "0.32.3", features = ["wgpu"] }
+egui = "0.32.3"
+egui-wgpu = { version = "0.32.3", features = ["wayland", "winit"] }
+glam = "0.30.8"
+tobj = "4.0.3"
