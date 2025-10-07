@@ -221,6 +221,7 @@ impl eframe::App for App {
                 }
             }
         });
+        ctx.request_repaint();
     }
 }
 struct CustomTriangleCallback {
