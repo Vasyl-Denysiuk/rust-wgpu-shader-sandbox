@@ -1,3 +1,4 @@
+mod config;
 const DEFAULT_MODEL_PATH: &str = "./model.obj";
 const DEFAULT_SHADER: &str =
 "
@@ -213,13 +214,22 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("Enter new WGSL shader code:");
-            ui.text_edit_multiline(&mut self.shader_conf.shader_src);
-
+            egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::multiline(&mut self.shader_conf.shader_src)
+                    .font(egui::TextStyle::Monospace)
+                    .code_editor()
+                    .desired_rows(10)
+                    .lock_focus(true)
+                    .desired_width(f32::INFINITY)
+                );
             if ui.button("Compile Shader").clicked() {
                 if let Some(rs) = frame.wgpu_render_state() {
                     self.reload_shader(&rs, self.shader_conf.shader_src.clone());
                 }
             }
+            });
+
         });
         ctx.request_repaint();
     }
