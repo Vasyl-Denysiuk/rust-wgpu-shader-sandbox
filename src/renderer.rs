@@ -300,7 +300,7 @@ pub struct LightUniform {
 
 impl LightUniform {
     pub fn new() -> LightUniform {
-        return LightUniform { position: [3., 3., 3.], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
+        return LightUniform { position: [3.0, 3.0, 3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
     }
 }
 
@@ -308,4 +308,10 @@ impl LightUniform {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ModelUniform {
     pub model: [[f32; 4]; 4],
+}
+
+impl ModelUniform {
+    pub fn new() -> ModelUniform {
+        todo!();
+    }
 }

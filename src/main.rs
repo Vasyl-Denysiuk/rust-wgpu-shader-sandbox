@@ -62,7 +62,7 @@ impl eframe::App for App {
                 if ctx.input(|i| i.key_down(egui::Key::Enter)) {
                     self.camera.down();
                 }
-                self.camera.resize(ctx.available_rect().height()/ctx.available_rect().width());
+                self.camera.resize(0.5*ctx.available_rect().width()/ctx.available_rect().height());
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
                     self.custom_painting(ui);
                 });
