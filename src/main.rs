@@ -1,12 +1,13 @@
 pub mod config;
 pub mod renderer;
 pub mod camera;
+pub mod object;
 
 use eframe::egui_wgpu;
 
 pub struct App {
     shader_conf: config::ShaderConfig,
-    object_path: Option<String>,
+    object: object::Object,
     camera: camera::WorldCamera,
     light: renderer::LightUniform,
     model: renderer::ModelUniform,
@@ -25,7 +26,7 @@ impl App {
             camera: camera::WorldCamera::new(),
             light: renderer::LightUniform::new(),
             model: renderer::ModelUniform::new(),
-            object_path: None,
+            object: object::Object::default(),
             shader_conf: config::ShaderConfig {
                 active_model: Box::new(config::Phong::new())
             }
@@ -35,7 +36,7 @@ impl App {
     fn reload_shader(&self, render_state: &egui_wgpu::RenderState) {
         renderer::build_pipeline(
             render_state,
-            &self.object_path,
+            &self.object.opened_file.as_ref().map(|p| p.as_path()),
             &*self.shader_conf.active_model,
         );
     }
@@ -86,23 +87,12 @@ impl eframe::App for App {
                     self.reload_shader(&rs);
                 }
             }
-            ui.label("Enter new WGSL shader code:");
-            egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut self.shader_conf.active_model.get_source())
-                    .code_editor()
-                    .desired_rows(10)
-                    .desired_width(f32::INFINITY)
-                );
-            if ui.button("Compile Shader").clicked() {
+            if self.object.build_widget(ui, ctx) {
                 if let Some(rs) = frame.wgpu_render_state() {
                     self.reload_shader(&rs);
                 }
-            }
-            });
-
+            };
         });
-
         ctx.request_repaint();
     }
 }

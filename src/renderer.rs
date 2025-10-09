@@ -1,62 +1,13 @@
-const DEFAULT_OBJECT_PATH: &str = "./test1.obj";
-
 use eframe::{egui_wgpu::{
     self,
-    wgpu::{
-        self,
-        util::DeviceExt as _
-    }
+    wgpu::{self}
 }, wgpu::{PipelineCompilationOptions}};
 
 use crate::config;
 
-pub fn load_obj(render_state: &egui_wgpu::RenderState, path: &Option<String>) -> (wgpu::Buffer, u32) {
-    let path = path.as_deref().unwrap_or(DEFAULT_OBJECT_PATH);
-    let (models, _materials) = tobj::load_obj(
-        path,
-        &tobj::LoadOptions {
-            triangulate: true,
-            single_index: true,
-            ..Default::default()
-        },
-    ).expect("Failed to load OBJ file");
-    let mesh = &models[0].mesh;
-
-    let mut vertices = Vec::new();
-    for i in 0..mesh.positions.len() / 3 {
-        let position = [
-            mesh.positions[i * 3],
-            mesh.positions[i * 3 + 1],
-            mesh.positions[i * 3 + 2],
-        ];
-        let normal = if !mesh.normals.is_empty() {
-            [
-                mesh.normals[i * 3],
-                mesh.normals[i * 3 + 1],
-                mesh.normals[i * 3 + 2],
-            ]
-        } else {
-            [0.0, 0.0, 1.0]
-        };
-        let texcoord = if !mesh.texcoords.is_empty() {
-            [mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]]
-        } else {
-            [0.0, 0.0]
-        };
-        vertices.push(Vertex { position, normal, texcoord });
-    }
-
-    let vertex_buffer = render_state.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-    (vertex_buffer, vertices.len() as u32)
-}
-
 pub fn build_pipeline(
     render_state: &egui_wgpu::RenderState,
-    obj_path: &Option<String>,
+    obj_path: &Option<&std::path::Path>,
     shading_model: &dyn config::ShadingModel,
 ) {
     let src = shading_model.get_source();
@@ -201,7 +152,7 @@ pub fn build_pipeline(
         label: None,
     });
 
-    let (vertex_buffer, vertex_count) = load_obj(render_state, obj_path);
+    let (vertex_buffer, vertex_count) = crate::object::Object::load_obj(render_state, obj_path);
     render_state
         .renderer
         .write()
@@ -314,6 +265,9 @@ pub struct Vertex {
 }
 
 impl Vertex {
+    pub fn new(position: [f32; 3], normal: [f32; 3], texcoord: [f32; 2]) -> Vertex {
+        Vertex { position, normal, texcoord }
+    }
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,

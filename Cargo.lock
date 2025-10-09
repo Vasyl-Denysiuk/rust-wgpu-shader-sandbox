@@ -738,6 +738,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
+
+[[package]]
 name = "ecolor"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -824,13 +830,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-wgpu-demo"
+name = "egui-wgpu-shader-sandbox"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "eframe",
  "egui",
  "egui-wgpu",
+ "egui_file",
  "glam",
  "tobj",
 ]
@@ -853,6 +860,16 @@ dependencies = [
  "web-time",
  "webbrowser",
  "winit",
+]
+
+[[package]]
+name = "egui_file"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "548e80ac8b00f7cc85b49899d9775ca784fe500e1507d40107823f24ad98c993"
+dependencies = [
+ "dyn-clone",
+ "egui",
 ]
 
 [[package]]

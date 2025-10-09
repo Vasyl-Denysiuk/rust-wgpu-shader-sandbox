@@ -44,14 +44,15 @@ impl ShadingModel for Phong {
             has_changed |= ui.add(egui::Slider::new(&mut self.kd, 0.0..=1.0)).changed();
             ui.label("specular strength");
             has_changed |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).changed();
-            ui.label("shininess strength");
+            ui.label("shininess");
             has_changed |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).changed();
             has_changed
         }).inner
     }
 
     fn get_source(&self) -> String {
-        include_str!("./shaders/phong.wgsl").into()
+        let _path: std::path::PathBuf = ["shaders", "phong.wgsl"].iter().collect();
+        include_str!("shaders/phong.wgsl").into()
     }
     
     fn get_constants(&self) -> Vec<(&str, f64)> {
