@@ -1,21 +1,15 @@
 pub mod config;
 pub mod renderer;
 pub mod camera;
-const DEFAULT_MODEL_PATH: &str = "./test.obj";
-const DEFAULT_SHADER: &str = include_str!("./shaders/phong.wgsl");
 
 use eframe::egui_wgpu;
 
 pub struct App {
-    shader_conf: ShaderConfig,
+    shader_conf: config::ShaderConfig,
+    object_path: Option<String>,
     camera: camera::WorldCamera,
     light: renderer::LightUniform,
     model: renderer::ModelUniform,
-}
-
-pub struct ShaderConfig {
-    shader_src: String,
-    obj_path: String,
 }
 
 impl App {
@@ -23,27 +17,26 @@ impl App {
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
         renderer::build_pipeline(
             wgpu_render_state,
-            None,
-             None,
-            &[]
+            &None,
+            &config::Phong::new(),
         );
 
         Some(Self {
             camera: camera::WorldCamera::new(),
             light: renderer::LightUniform::new(),
             model: renderer::ModelUniform::new(),
-            shader_conf: ShaderConfig{
-                shader_src: DEFAULT_SHADER.into(),
-                obj_path: DEFAULT_MODEL_PATH.into()
+            object_path: None,
+            shader_conf: config::ShaderConfig {
+                active_model: Box::new(config::Phong::new())
             }
             })
     }
 
     fn reload_shader(&self, render_state: &egui_wgpu::RenderState) {
         renderer::build_pipeline(
-            render_state, Some(self.shader_conf.shader_src.clone()),
-            Some(self.shader_conf.obj_path.clone()),
-            &[]
+            render_state,
+            &self.object_path,
+            &*self.shader_conf.active_model,
         );
     }
 }
@@ -82,10 +75,21 @@ impl eframe::App for App {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ComboBox::from_label("Select one!")
+                .selected_text(format!(""))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.shader_conf.active_model.as_enum(), config::ShadingModelEnum::Phong, "Phong");
+                }
+            );
+            if self.shader_conf.active_model.build_widget(ui) {
+                if let Some(rs) = frame.wgpu_render_state() {
+                    self.reload_shader(&rs);
+                }
+            }
             ui.label("Enter new WGSL shader code:");
             egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add(
-                egui::TextEdit::multiline(&mut self.shader_conf.shader_src)
+                egui::TextEdit::multiline(&mut self.shader_conf.active_model.get_source())
                     .code_editor()
                     .desired_rows(10)
                     .desired_width(f32::INFINITY)

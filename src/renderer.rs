@@ -1,5 +1,4 @@
-const DEFAULT_SHADER: &str = include_str!("./shaders/phong.wgsl");
-const DEFAULT_MODEL_PATH: &str = "./test1.obj";
+const DEFAULT_OBJECT_PATH: &str = "./test1.obj";
 
 use eframe::{egui_wgpu::{
     self,
@@ -9,8 +8,10 @@ use eframe::{egui_wgpu::{
     }
 }, wgpu::{PipelineCompilationOptions}};
 
-pub fn load_obj(render_state: &egui_wgpu::RenderState, path: Option<String>) -> (wgpu::Buffer, u32) {
-    let path = path.as_deref().unwrap_or(DEFAULT_MODEL_PATH);
+use crate::config;
+
+pub fn load_obj(render_state: &egui_wgpu::RenderState, path: &Option<String>) -> (wgpu::Buffer, u32) {
+    let path = path.as_deref().unwrap_or(DEFAULT_OBJECT_PATH);
     let (models, _materials) = tobj::load_obj(
         path,
         &tobj::LoadOptions {
@@ -54,12 +55,11 @@ pub fn load_obj(render_state: &egui_wgpu::RenderState, path: Option<String>) -> 
 }
 
 pub fn build_pipeline(
-    render_state: &egui_wgpu::RenderState, 
-    shader_src: Option<String>, 
-    obj_path: Option<String>,
-    constants: &'_ [(&'_ str, f64)]
+    render_state: &egui_wgpu::RenderState,
+    obj_path: &Option<String>,
+    shading_model: &dyn config::ShadingModel,
 ) {
-    let src = shader_src.as_deref().unwrap_or(DEFAULT_SHADER);
+    let src = shading_model.get_source();
     let device = &render_state.device;
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
@@ -134,7 +134,7 @@ pub fn build_pipeline(
             entry_point: Some("fs_main"),
             targets: &[Some(render_state.target_format.into())],
             compilation_options: PipelineCompilationOptions {
-                constants,
+                constants: shading_model.get_constants().as_slice(),
                 ..Default::default()
             },
         }),

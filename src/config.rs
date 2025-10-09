@@ -1,20 +1,21 @@
 use egui;
-use std::rc::Rc;
-struct ShaderConfig {
-    active_model: Box<dyn ShadingModel>,
-    active_effects: Vec<Rc<dyn AfterEffects>>,
+pub struct ShaderConfig {
+    pub active_model: Box<dyn ShadingModel>,
 }
 
-trait ShadingModel {
-    fn build_widget(&self, ui: &mut egui::Ui) -> Box<dyn egui::Widget>;
-    fn build_source(&self) -> String;
+pub trait ShadingModel {
+    fn build_widget(&mut self, ui: &mut egui::Ui) -> bool;
+    fn get_source(&self) -> String;
+    fn get_constants(&self) -> Vec<(&str, f64)>;
+    fn as_enum(&self) -> ShadingModelEnum;
 }
 
-trait AfterEffects {
-    fn build_widget(&self) -> Box<dyn egui::Widget>;
+#[derive(PartialEq)]
+pub enum ShadingModelEnum {
+    Phong
 }
 
-struct Phong {
+pub struct Phong {
     ka: f32,
     kd: f32,
     ks: f32,
@@ -22,7 +23,7 @@ struct Phong {
 }
 
 impl Phong {
-    fn new() -> Phong {
+    pub fn new() -> Phong {
         Phong {
             ka: 0.05,
             kd: 0.4,
@@ -33,11 +34,31 @@ impl Phong {
 }
 
 impl ShadingModel for Phong {
-    fn build_widget(&self, ui: &mut egui::Ui) -> Box<dyn egui::Widget> {
-        todo!();
+    fn build_widget(&mut self, ui: &mut egui::Ui) -> bool {
+        ui.vertical(|ui| {
+            let mut has_changed = false;
+            has_changed |= ui.add(egui::Slider::new(&mut self.ka, 0.0..=1.0)).changed();
+            has_changed |= ui.add(egui::Slider::new(&mut self.kd, 0.0..=1.0)).changed();
+            has_changed |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).changed();
+            has_changed |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).changed();
+            has_changed
+        }).inner
     }
 
-    fn build_source(&self) -> String {
-        todo!();
+    fn get_source(&self) -> String {
+        include_str!("./shaders/phong.wgsl").into()
+    }
+    
+    fn get_constants(&self) -> Vec<(&str, f64)> {
+        vec!(
+            ("ka", self.ka as f64),
+            ("kd", self.kd as f64),
+            ("ks", self.ks as f64),
+            ("alph", self.alph as f64),
+        )
+    }
+
+    fn as_enum(&self) -> ShadingModelEnum {
+        ShadingModelEnum::Phong
     }
 }
