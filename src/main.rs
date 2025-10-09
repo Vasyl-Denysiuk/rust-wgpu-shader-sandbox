@@ -41,42 +41,44 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        egui::SidePanel::left("viewport_panel")
+        self.camera.resize(0.5*ctx.available_rect().width()/ctx.available_rect().height());
+
+        let viewport_response = egui::SidePanel::left("viewport_panel")
             .exact_width(ctx.available_rect().width() * 0.5)
             .show(ctx, |ui| {
-                if ctx.input(|i| i.key_down(egui::Key::W)) {
-                    self.camera.forward();
-                }
-                if ctx.input(|i| i.key_down(egui::Key::S)) {
-                    self.camera.backward();
-                }
-                if ctx.input(|i| i.key_down(egui::Key::D)) {
-                    self.camera.right();
-                }
-                if ctx.input(|i| i.key_down(egui::Key::A)) {
-                    self.camera.left();
-                }
-                if ctx.input(|i| i.key_down(egui::Key::Space)) {
-                    self.camera.up();
-                }
-                if ctx.input(|i| i.key_down(egui::Key::Enter)) {
-                    self.camera.down();
-                }
-                self.camera.resize(0.5*ctx.available_rect().width()/ctx.available_rect().height());
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
                     self.custom_painting(ui);
                 });
             });
+
+        if viewport_response.response.hovered() {
+            if ctx.input(|i| i.key_down(egui::Key::W)) {
+                self.camera.forward();
+            }
+            if ctx.input(|i| i.key_down(egui::Key::S)) {
+                self.camera.backward();
+            }
+            if ctx.input(|i| i.key_down(egui::Key::D)) {
+                self.camera.right();
+            }
+            if ctx.input(|i| i.key_down(egui::Key::A)) {
+                self.camera.left();
+            }
+            if ctx.input(|i| i.key_down(egui::Key::Space)) {
+                self.camera.up();
+            }
+            if ctx.input(|i| i.key_down(egui::Key::Enter)) {
+                self.camera.down();
+            }
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("Enter new WGSL shader code:");
             egui::ScrollArea::vertical().show(ui, |ui| {
             ui.add(
                 egui::TextEdit::multiline(&mut self.shader_conf.shader_src)
-                    .font(egui::TextStyle::Monospace)
                     .code_editor()
                     .desired_rows(10)
-                    .lock_focus(true)
                     .desired_width(f32::INFINITY)
                 );
             if ui.button("Compile Shader").clicked() {
@@ -87,6 +89,7 @@ impl eframe::App for App {
             });
 
         });
+
         ctx.request_repaint();
     }
 }
