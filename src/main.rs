@@ -76,7 +76,7 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ComboBox::from_label("Select one!")
-                .selected_text(format!(""))
+                .selected_text(format!("{:?}", self.shader_conf.active_model.as_enum()))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.shader_conf.active_model.as_enum(), config::ShadingModelEnum::Phong, "Phong");
                 }

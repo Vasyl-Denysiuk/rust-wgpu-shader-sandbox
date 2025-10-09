@@ -10,7 +10,7 @@ pub trait ShadingModel {
     fn as_enum(&self) -> ShadingModelEnum;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ShadingModelEnum {
     Phong
 }
@@ -37,9 +37,14 @@ impl ShadingModel for Phong {
     fn build_widget(&mut self, ui: &mut egui::Ui) -> bool {
         ui.vertical(|ui| {
             let mut has_changed = false;
+            ui.style_mut().spacing.slider_width = ui.available_width();
+            ui.label("ambient strength");
             has_changed |= ui.add(egui::Slider::new(&mut self.ka, 0.0..=1.0)).changed();
+            ui.label("diffuse strength");
             has_changed |= ui.add(egui::Slider::new(&mut self.kd, 0.0..=1.0)).changed();
+            ui.label("specular strength");
             has_changed |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).changed();
+            ui.label("shininess strength");
             has_changed |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).changed();
             has_changed
         }).inner
