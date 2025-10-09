@@ -12,6 +12,7 @@ pub struct App {
     shader_conf: ShaderConfig,
     camera: camera::WorldCamera,
     light: renderer::LightUniform,
+    model: renderer::ModelUniform,
 }
 
 pub struct ShaderConfig {
@@ -27,6 +28,7 @@ impl App {
         Some(Self {
             camera: camera::WorldCamera::new(),
             light: renderer::LightUniform::new(),
+            model: renderer::ModelUniform::new(),
             shader_conf: ShaderConfig{
                 shader_src: DEFAULT_SHADER.into(),
                 obj_path: DEFAULT_MODEL_PATH.into()
@@ -103,6 +105,7 @@ impl App {
             renderer::CustomTriangleCallback { 
                 view_projection: renderer::CameraUniform::from_camera(&self.camera), 
                 light: self.light,
+                model: self.model,
             },
         ));
     }

@@ -54,7 +54,7 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
         source: wgpu::ShaderSource::Wgsl(src.into()),
     });
 
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
@@ -83,11 +83,27 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
             label: None,
         });
 
+    let model_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: None,
+        });
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[
-            &bind_group_layout,
+            &camera_bind_group_layout,
             &light_bind_group_layout,
+            &model_bind_group_layout,
             ],
         push_constant_ranges: &[],
     });
@@ -97,7 +113,7 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: None,
+            entry_point: Some("vs_main"),
             buffers: &[Vertex::desc()],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
@@ -122,42 +138,50 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
         cache: None,
     });
 
-    let uniform_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
+    let camera_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: std::mem::size_of::<CameraUniform>() as u64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
-        layout: &bind_group_layout,
+        layout: &camera_bind_group_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
-            resource: uniform_buffer.as_entire_binding(),
+            resource: camera_buffer.as_entire_binding(),
         }],
     });
 
-    let light_uniform = LightUniform {
-        position: [2.0, 2.0, 2.0],
-        _padding: 0,
-        color: [1.0, 1.0, 1.0],
-        _padding2: 0,
-    };
-
-    let light_buffer = device.create_buffer_init(
-        &wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(&[light_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        }
-    );
+    let light_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: std::mem::size_of::<LightUniform>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
 
     let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &light_bind_group_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: light_buffer.as_entire_binding(),
+        }],
+        label: None,
+    });
+
+    let model_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: std::mem::size_of::<ModelUniform>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &model_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: model_buffer.as_entire_binding(),
         }],
         label: None,
     });
@@ -169,11 +193,13 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
         .callback_resources
         .insert(TriangleRenderResources {
             pipeline,
-            bind_group,
-            uniform_buffer,
-            vertex_buffer,
+            camera_bind_group,
+            camera_buffer,
             light_buffer,
             light_bind_group,
+            model_buffer,
+            model_bind_group,
+            vertex_buffer,
             vertex_count
         });
 }
@@ -181,6 +207,7 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
 pub struct CustomTriangleCallback {
     pub view_projection: CameraUniform,
     pub light: LightUniform,
+    pub model: ModelUniform
 }
 
 impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
@@ -193,7 +220,7 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let resources: &TriangleRenderResources = resources.get().unwrap();
-        resources.prepare(device, queue, &self.view_projection, &self.light);
+        resources.prepare(device, queue, &self.view_projection, &self.light, &self.model);
         Vec::new()
     }
 
@@ -210,18 +237,20 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
 
 struct TriangleRenderResources {
     pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
-    uniform_buffer: wgpu::Buffer,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
+    model_buffer: wgpu::Buffer,
+    model_bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
 }
 
 impl TriangleRenderResources {
-    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue, view_projection: &CameraUniform, light: &LightUniform) {
+    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue, view_projection: &CameraUniform, light: &LightUniform, model: &ModelUniform) {
         queue.write_buffer(
-            &self.uniform_buffer,
+            &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[*view_projection]),
         );
@@ -230,12 +259,18 @@ impl TriangleRenderResources {
             0,
             bytemuck::cast_slice(&[*light]),
         );
+        queue.write_buffer(
+            &self.model_buffer,
+            0,
+            bytemuck::cast_slice(&[*model]),
+        );
     }
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
         render_pass.set_bind_group(1, &self.light_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.model_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..self.vertex_count, 0..1);
     }
@@ -312,6 +347,11 @@ pub struct ModelUniform {
 
 impl ModelUniform {
     pub fn new() -> ModelUniform {
-        todo!();
+        ModelUniform {model: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, -3.0, 1.0],
+        ]}
     }
 }

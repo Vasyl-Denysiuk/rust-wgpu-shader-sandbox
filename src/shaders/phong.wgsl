@@ -16,6 +16,12 @@ struct Light {
 @group(1) @binding(0)
 var<uniform> light: Light;
 
+struct ModelUniform {
+    model_transform: mat4x4<f32>,
+}
+@group(2) @binding(0)
+var<uniform> model: ModelUniform;
+
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -33,9 +39,10 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-	out.clip_position = camera.view_proj * vec4<f32>(in.position, 1.0);
+    let world_pos = model.model_transform * vec4<f32>(in.position, 1.0);
+    out.world_position = world_pos.xyz;
+    out.clip_position = camera.view_proj * world_pos;
     out.world_normal = in.normal;
-    out.world_position = in.position;
     out.texcoord = in.texcoord;
     return out;
 }
