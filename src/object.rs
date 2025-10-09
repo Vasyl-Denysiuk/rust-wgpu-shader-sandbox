@@ -56,12 +56,11 @@ impl Object {
         contents: bytemuck::cast_slice(&vertices),
         usage: eframe::wgpu::BufferUsages::VERTEX,
     });
-    print!("loading object at {}", path.display());
     (vertex_buffer, vertices.len() as u32)
   } 
   
   pub fn build_widget(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> bool {
-    if (ui.button("Open")).clicked() {
+    if (ui.button("Load 3D model")).clicked() {
       // Show only files with the extension "obj".
       let filter = Box::new({
         let ext = Some(OsStr::new("obj"));
