@@ -1,0 +1,311 @@
+const DEFAULT_SHADER: &str = include_str!("./shaders/phong.wgsl");
+const DEFAULT_MODEL_PATH: &str = "./test.obj";
+
+use eframe::egui_wgpu::{
+    self,
+    wgpu::{
+        self,
+        util::DeviceExt as _
+    }
+};
+
+pub fn load_obj(render_state: &egui_wgpu::RenderState, path: Option<String>) -> (wgpu::Buffer, u32) {
+    let path = path.as_deref().unwrap_or(DEFAULT_MODEL_PATH);
+    let (models, _materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS).expect("Failed to load OBJ file");
+    let mesh = &models[0].mesh;
+
+    let mut vertices = Vec::new();
+    for i in 0..mesh.positions.len() / 3 {
+        let position = [
+            mesh.positions[i * 3],
+            mesh.positions[i * 3 + 1],
+            mesh.positions[i * 3 + 2],
+        ];
+        let normal = if !mesh.normals.is_empty() {
+            [
+                mesh.normals[i * 3],
+                mesh.normals[i * 3 + 1],
+                mesh.normals[i * 3 + 2],
+            ]
+        } else {
+            [0.0, 0.0, 1.0]
+        };
+        let texcoord = if !mesh.texcoords.is_empty() {
+            [mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]]
+        } else {
+            [0.0, 0.0]
+        };
+        vertices.push(Vertex { position, normal, texcoord });
+    }
+
+    let vertex_buffer = render_state.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: None,
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    (vertex_buffer, vertices.len() as u32)
+}
+
+pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<String>, obj_path: Option<String>) {
+    let src = shader_src.as_deref().unwrap_or(DEFAULT_SHADER);
+    let device = &render_state.device;
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(src.into()),
+    });
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: Some(wgpu::BufferSize::new(std::mem::size_of::<CameraUniform>() as u64).unwrap()),
+            },
+            count: None,
+        }],
+    });
+
+    let light_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: None,
+        });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[
+            &bind_group_layout,
+            &light_bind_group_layout,
+            ],
+        push_constant_ranges: &[],
+    });
+
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: None,
+            buffers: &[Vertex::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(render_state.target_format.into())],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    });
+
+    let uniform_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: std::mem::size_of::<CameraUniform>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: uniform_buffer.as_entire_binding(),
+        }],
+    });
+
+    let light_uniform = LightUniform {
+        position: [2.0, 2.0, 2.0],
+        _padding: 0,
+        color: [1.0, 1.0, 1.0],
+        _padding2: 0,
+    };
+
+    let light_buffer = device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(&[light_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        }
+    );
+
+    let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &light_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: light_buffer.as_entire_binding(),
+        }],
+        label: None,
+    });
+
+    let (vertex_buffer, vertex_count) = load_obj(render_state, obj_path);
+    render_state
+        .renderer
+        .write()
+        .callback_resources
+        .insert(TriangleRenderResources {
+            pipeline,
+            bind_group,
+            uniform_buffer,
+            vertex_buffer,
+            light_buffer,
+            light_bind_group,
+            vertex_count
+        });
+}
+
+pub struct CustomTriangleCallback {
+    pub view_projection: CameraUniform,
+    pub light: LightUniform,
+}
+
+impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
+    fn prepare(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        _screen_descriptor: &egui_wgpu::ScreenDescriptor,
+        _egui_encoder: &mut wgpu::CommandEncoder,
+        resources: &mut egui_wgpu::CallbackResources,
+    ) -> Vec<wgpu::CommandBuffer> {
+        let resources: &TriangleRenderResources = resources.get().unwrap();
+        resources.prepare(device, queue, &self.view_projection, &self.light);
+        Vec::new()
+    }
+
+    fn paint(
+        &self,
+        _info: egui::PaintCallbackInfo,
+        render_pass: &mut wgpu::RenderPass<'static>,
+        resources: &egui_wgpu::CallbackResources,
+    ) {
+        let resources: &TriangleRenderResources = resources.get().unwrap();
+        resources.paint(render_pass);
+    }
+}
+
+struct TriangleRenderResources {
+    pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+    uniform_buffer: wgpu::Buffer,
+    light_buffer: wgpu::Buffer,
+    light_bind_group: wgpu::BindGroup,
+    vertex_buffer: wgpu::Buffer,
+    vertex_count: u32,
+}
+
+impl TriangleRenderResources {
+    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue, view_projection: &CameraUniform, light: &LightUniform) {
+        queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[*view_projection]),
+        );
+        queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[*light]),
+        );
+    }
+
+    fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.light_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.draw(0..self.vertex_count, 0..1);
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+    pub fn from_camera(camera: &crate::camera::WorldCamera) -> Self {
+        Self {
+            view_proj: camera.build_view_projection().to_cols_array_2d(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    position: [f32; 3],
+    normal: [f32; 3],
+    texcoord: [f32; 2],
+}
+
+impl Vertex {
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+            ],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LightUniform {
+    position: [f32; 3],
+    _padding: u32,
+    color: [f32; 3],
+    _padding2: u32,
+}
+
+impl LightUniform {
+    pub fn new() -> LightUniform {
+        return LightUniform { position: [3., 3., 3.], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ModelUniform {
+    pub model: [[f32; 4]; 4],
+}

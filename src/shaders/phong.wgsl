@@ -25,25 +25,25 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
-    @location(1) texcoord: vec2<f32>,
-    @location(2) color: vec3<f32>,
+    @location(0) world_position: vec3<f32>,
+    @location(1) world_normal: vec3<f32>,
+    @location(2) texcoord: vec2<f32>,
 };
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-	let l = normalize(light.position - in.position);
-	let coef = dot(l, normalize(in.normal));
-	let color = vec3f(1.0, 1.0, 0.0)*light.color*(ka+kd*coef);
 	out.clip_position = camera.view_proj * vec4<f32>(in.position, 1.0);
-    out.normal = color;
+    out.world_normal = in.normal;
+    out.world_position = in.position;
     out.texcoord = in.texcoord;
-    out.color = color;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4f(in.normal, 1.0);
+    let l = normalize(light.position - in.world_position);
+	let coef = max(0, dot(l, normalize(in.world_normal)));
+	let color = vec3f(1.0, 1.0, 0.0)*light.color*(ka+kd*coef);
+    return vec4f(color, 1.0);
 }
