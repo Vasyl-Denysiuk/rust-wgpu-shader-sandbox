@@ -4,9 +4,7 @@ pub mod camera;
 const DEFAULT_MODEL_PATH: &str = "./test.obj";
 const DEFAULT_SHADER: &str = include_str!("./shaders/phong.wgsl");
 
-use eframe::egui_wgpu::{
-    self,
-};
+use eframe::egui_wgpu;
 
 pub struct App {
     shader_conf: ShaderConfig,
@@ -23,7 +21,12 @@ pub struct ShaderConfig {
 impl App {
     pub fn new<'a>(cc: &'a eframe::CreationContext<'a>) -> Option<Self> {
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
-        renderer::build_pipeline(wgpu_render_state, None, None);
+        renderer::build_pipeline(
+            wgpu_render_state,
+            None,
+             None,
+            &[]
+        );
 
         Some(Self {
             camera: camera::WorldCamera::new(),
@@ -36,8 +39,12 @@ impl App {
             })
     }
 
-    fn reload_shader(&self, render_state: &egui_wgpu::RenderState, shader_src: String) {
-        renderer::build_pipeline(render_state, Some(shader_src), Some(self.shader_conf.obj_path.clone()));
+    fn reload_shader(&self, render_state: &egui_wgpu::RenderState) {
+        renderer::build_pipeline(
+            render_state, Some(self.shader_conf.shader_src.clone()),
+            Some(self.shader_conf.obj_path.clone()),
+            &[]
+        );
     }
 }
 
@@ -83,7 +90,7 @@ impl eframe::App for App {
                 );
             if ui.button("Compile Shader").clicked() {
                 if let Some(rs) = frame.wgpu_render_state() {
-                    self.reload_shader(&rs, self.shader_conf.shader_src.clone());
+                    self.reload_shader(&rs);
                 }
             }
             });

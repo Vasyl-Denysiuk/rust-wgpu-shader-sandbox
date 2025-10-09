@@ -15,19 +15,19 @@ trait AfterEffects {
 }
 
 struct Phong {
-    amb_coef: f32,
-    diff_coef: f32,
-    spec_coef: f32,
-    shininess: f32,
+    ka: f32,
+    kd: f32,
+    ks: f32,
+    alph: f32,
 }
 
 impl Phong {
     fn new() -> Phong {
         Phong {
-            amb_coef: 0.05,
-            diff_coef: 0.5,
-            spec_coef: 0.5,
-            shininess: 4.0
+            ka: 0.05,
+            kd: 0.4,
+            ks: 0.4,
+            alph: 4.0
         }
     }
 }
@@ -36,6 +36,7 @@ impl ShadingModel for Phong {
     fn build_widget(&self, ui: &mut egui::Ui) -> Box<dyn egui::Widget> {
         todo!();
     }
+
     fn build_source(&self) -> String {
         todo!();
     }

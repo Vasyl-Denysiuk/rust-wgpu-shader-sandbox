@@ -1,17 +1,24 @@
 const DEFAULT_SHADER: &str = include_str!("./shaders/phong.wgsl");
-const DEFAULT_MODEL_PATH: &str = "./test.obj";
+const DEFAULT_MODEL_PATH: &str = "./test1.obj";
 
-use eframe::egui_wgpu::{
+use eframe::{egui_wgpu::{
     self,
     wgpu::{
         self,
         util::DeviceExt as _
     }
-};
+}, wgpu::{PipelineCompilationOptions}};
 
 pub fn load_obj(render_state: &egui_wgpu::RenderState, path: Option<String>) -> (wgpu::Buffer, u32) {
     let path = path.as_deref().unwrap_or(DEFAULT_MODEL_PATH);
-    let (models, _materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS).expect("Failed to load OBJ file");
+    let (models, _materials) = tobj::load_obj(
+        path,
+        &tobj::LoadOptions {
+            triangulate: true,
+            single_index: true,
+            ..Default::default()
+        },
+    ).expect("Failed to load OBJ file");
     let mesh = &models[0].mesh;
 
     let mut vertices = Vec::new();
@@ -46,7 +53,12 @@ pub fn load_obj(render_state: &egui_wgpu::RenderState, path: Option<String>) -> 
     (vertex_buffer, vertices.len() as u32)
 }
 
-pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<String>, obj_path: Option<String>) {
+pub fn build_pipeline(
+    render_state: &egui_wgpu::RenderState, 
+    shader_src: Option<String>, 
+    obj_path: Option<String>,
+    constants: &'_ [(&'_ str, f64)]
+) {
     let src = shader_src.as_deref().unwrap_or(DEFAULT_SHADER);
     let device = &render_state.device;
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -121,7 +133,10 @@ pub fn build_pipeline(render_state: &egui_wgpu::RenderState, shader_src: Option<
             module: &shader,
             entry_point: Some("fs_main"),
             targets: &[Some(render_state.target_format.into())],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: PipelineCompilationOptions {
+                constants,
+                ..Default::default()
+            },
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -335,7 +350,7 @@ pub struct LightUniform {
 
 impl LightUniform {
     pub fn new() -> LightUniform {
-        return LightUniform { position: [3.0, 3.0, 3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
+        return LightUniform { position: [0.0, 3.0, 3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
     }
 }
 

@@ -1,7 +1,7 @@
-const ka: f32 = 0.05;
-const kd: f32 = 0.4;
-const ks: f32 = 0.4;
-const alph: f32 = 4.0;
+override ka: f32 = 0.05;
+override kd: f32 = 0.4;
+override ks: f32 = 0.4;
+override alph: f32 = 4.0;
 
 struct CameraUniform {
     view_proj: mat4x4<f32>,
@@ -50,7 +50,10 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let l = normalize(light.position - in.world_position);
-	let coef = max(0, dot(l, normalize(in.world_normal)));
-	let color = vec3f(1.0, 1.0, 0.0)*light.color*(ka+kd*coef);
+	let diff = max(0, dot(l, normalize(in.world_normal)));
+    let v = normalize(-in.world_position);
+    let r = reflect(-l, in.world_normal);
+    let spec = pow(max(dot(v, r), 0.0), alph);
+	let color = vec3f(1.0, 1.0, 0.0)*light.color*(ka+kd*diff+ks*spec);
     return vec4f(color, 1.0);
 }
