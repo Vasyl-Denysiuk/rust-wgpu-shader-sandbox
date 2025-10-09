@@ -1,36 +1,6 @@
 mod config;
-const DEFAULT_MODEL_PATH: &str = "./model.obj";
-const DEFAULT_SHADER: &str =
-"
-struct CameraUniform {
-    view_proj: mat4x4<f32>,
-};
-@group(0) @binding(0)
-var<uniform> camera: CameraUniform;
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) texcoord: vec2<f32>,
-};
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
-    @location(1) texcoord: vec2<f32>,
-};
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    out.clip_position = camera.view_proj * vec4<f32>(in.position, 1.0);
-    out.normal = in.normal;
-    out.texcoord = in.texcoord;
-    return out;
-}
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = vec3<f32>(0.0);
-    return vec4<f32>(color, 1.0);
-}
-";
+const DEFAULT_MODEL_PATH: &str = "./test.obj";
+const DEFAULT_SHADER: &str = include_str!("./shaders/phong.wgsl");
 
 use eframe::egui_wgpu::{
     self,
@@ -41,9 +11,9 @@ use eframe::egui_wgpu::{
 };
 
 pub struct App {
-    angle: f32,
     shader_conf: ShaderConfig,
     camera: WorldCamera,
+    light: LightUniform,
 }
 
 pub struct ShaderConfig {
@@ -58,7 +28,7 @@ impl App {
 
         Some(Self {
             camera: WorldCamera::new(),
-            angle: 0.0,
+            light: LightUniform::new(),
             shader_conf: ShaderConfig{
                 shader_src: DEFAULT_SHADER.into(),
                 obj_path: DEFAULT_MODEL_PATH.into()
@@ -70,12 +40,12 @@ impl App {
         let src = shader_src.as_deref().unwrap_or(DEFAULT_SHADER);
         let device = &render_state.device;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("shader"),
+            label: None,
             source: wgpu::ShaderSource::Wgsl(src.into()),
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("camera"),
+            label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
@@ -88,14 +58,32 @@ impl App {
             }],
         });
 
+        let light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: None,
+            });
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pipeline_layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            label: None,
+            bind_group_layouts: &[
+                &bind_group_layout,
+                &light_bind_group_layout,
+                ],
             push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("pipeline"),
+            label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -109,7 +97,15 @@ impl App {
                 targets: &[Some(render_state.target_format.into())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false
+            },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
@@ -117,19 +113,43 @@ impl App {
         });
 
         let uniform_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("camera_uniform"),
+            label: None,
             size: std::mem::size_of::<CameraUniform>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("custom3d"),
+            label: None,
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: uniform_buffer.as_entire_binding(),
             }],
+        });
+
+        let light_uniform = LightUniform {
+            position: [2.0, 2.0, 2.0],
+            _padding: 0,
+            color: [1.0, 1.0, 1.0],
+            _padding2: 0,
+        };
+
+        let light_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(&[light_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &light_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: light_buffer.as_entire_binding(),
+            }],
+            label: None,
         });
 
         let (vertex_buffer, vertex_count) = Self::load_obj(render_state, obj_path);
@@ -142,6 +162,8 @@ impl App {
                 bind_group,
                 uniform_buffer,
                 vertex_buffer,
+                light_buffer,
+                light_bind_group,
                 vertex_count
             });
     }
@@ -180,7 +202,7 @@ impl App {
         }
 
         let vertex_buffer = render_state.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("vertex_buffer"),
+            label: None,
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
@@ -206,7 +228,13 @@ impl eframe::App for App {
                 if ctx.input(|i| i.key_down(egui::Key::A)) {
                     self.camera.position -= self.camera.right() * CAM_SPEED;
                 }
-
+                if ctx.input(|i| i.key_down(egui::Key::Enter)) {
+                    self.camera.position -= self.camera.up() * CAM_SPEED;
+                }
+                if ctx.input(|i| i.key_down(egui::Key::Space)) {
+                    self.camera.position += self.camera.up() * CAM_SPEED;
+                }
+                self.camera.aspect=ctx.available_rect().height()/ctx.available_rect().width();
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
                     self.custom_painting(ui);
                 });
@@ -236,6 +264,7 @@ impl eframe::App for App {
 }
 struct CustomTriangleCallback {
     view_projection: CameraUniform,
+    light: LightUniform,
 }
 
 impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
@@ -248,7 +277,7 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let resources: &TriangleRenderResources = resources.get().unwrap();
-        resources.prepare(device, queue, &self.view_projection);
+        resources.prepare(device, queue, &self.view_projection, &self.light);
         Vec::new()
     }
 
@@ -265,12 +294,14 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
 
 impl App {
     fn custom_painting(&mut self, ui: &mut egui::Ui) {
-        let (rect, response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::drag());
+        let (rect, _response) = ui.allocate_exact_size(ui.available_size(), egui::Sense::drag());
 
-        self.angle += response.drag_motion().x * 0.01;
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
             rect,
-            CustomTriangleCallback { view_projection: CameraUniform::from_camera(&self.camera) },
+            CustomTriangleCallback { 
+                view_projection: CameraUniform::from_camera(&self.camera), 
+                light: self.light,
+            },
         ));
     }
 }
@@ -279,22 +310,30 @@ struct TriangleRenderResources {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
+    light_buffer: wgpu::Buffer,
+    light_bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
 }
 
 impl TriangleRenderResources {
-    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue, view_projection: &CameraUniform) {
+    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue, view_projection: &CameraUniform, light: &LightUniform) {
         queue.write_buffer(
             &self.uniform_buffer,
             0,
             bytemuck::cast_slice(&[*view_projection]),
+        );
+        queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[*light]),
         );
     }
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.light_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..self.vertex_count, 0..1);
     }
@@ -396,6 +435,21 @@ impl Vertex {
                 },
             ],
         }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct LightUniform {
+    position: [f32; 3],
+    _padding: u32,
+    color: [f32; 3],
+    _padding2: u32,
+}
+
+impl LightUniform {
+    fn new() -> LightUniform {
+        return LightUniform { position: [3., 3., 3.], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
     }
 }
 

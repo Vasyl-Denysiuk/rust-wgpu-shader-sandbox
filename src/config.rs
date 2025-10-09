@@ -7,6 +7,7 @@ struct ShaderConfig {
 
 trait ShadingModel {
     fn build_widget(&self, ui: &mut egui::Ui) -> Box<dyn egui::Widget>;
+    fn build_source(&self) -> String;
 }
 
 trait AfterEffects {
@@ -33,6 +34,9 @@ impl Phong {
 
 impl ShadingModel for Phong {
     fn build_widget(&self, ui: &mut egui::Ui) -> Box<dyn egui::Widget> {
+        todo!();
+    }
+    fn build_source(&self) -> String {
         todo!();
     }
 }
