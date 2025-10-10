@@ -23,10 +23,10 @@ impl WorldCamera {
 
     pub fn build_view_projection(&self) -> glam::Mat4 {
         let rotation_matrix = glam::Mat4::from_euler(
-            glam::EulerRot::ZYX, 
-            self.rotation.z, 
-            self.rotation.y, 
-            self.rotation.x
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
         );
         let translation_matrix = glam::Mat4::from_translation(-self.position);
 
@@ -37,32 +37,62 @@ impl WorldCamera {
     }
 
     pub fn forward(&mut self) {
-        let rot = glam::Quat::from_euler(glam::EulerRot::ZYX, self.rotation.z, self.rotation.y, self.rotation.x);
+        let rot = glam::Quat::from_euler(
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
+        );
         self.position += rot * glam::Vec3::new(0.0, 0.0, -1.0) * Self::CAM_SPEED;
     }
 
     pub fn backward(&mut self) {
-        let rot = glam::Quat::from_euler(glam::EulerRot::ZYX, self.rotation.z, self.rotation.y, self.rotation.x);
+        let rot = glam::Quat::from_euler(
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
+        );
         self.position -= rot * glam::Vec3::new(0.0, 0.0, -1.0) * Self::CAM_SPEED;
     }
 
     pub fn right(&mut self) {
-        let rot = glam::Quat::from_euler(glam::EulerRot::ZYX, self.rotation.z, self.rotation.y, self.rotation.x);
+        let rot = glam::Quat::from_euler(
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
+        );
         self.position += rot * glam::Vec3::new(1.0, 0.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn left(&mut self) {
-        let rot = glam::Quat::from_euler(glam::EulerRot::ZYX, self.rotation.z, self.rotation.y, self.rotation.x);
+        let rot = glam::Quat::from_euler(
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
+        );
         self.position -= rot * glam::Vec3::new(1.0, 0.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn up(&mut self) {
-        let rot = glam::Quat::from_euler(glam::EulerRot::ZYX, self.rotation.z, self.rotation.y, self.rotation.x);
+        let rot = glam::Quat::from_euler(
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
+        );
         self.position += rot * glam::Vec3::new(0.0, 1.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn down(&mut self) {
-        let rot = glam::Quat::from_euler(glam::EulerRot::ZYX, self.rotation.z, self.rotation.y, self.rotation.x);
+        let rot = glam::Quat::from_euler(
+            glam::EulerRot::ZYX,
+            self.rotation.z,
+            self.rotation.y,
+            self.rotation.x,
+        );
         self.position -= rot * glam::Vec3::new(0.0, 1.0, 0.0) * Self::CAM_SPEED;
     }
 

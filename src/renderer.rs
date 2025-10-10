@@ -1,7 +1,10 @@
-use eframe::{egui_wgpu::{
-    self,
-    wgpu::{self}
-}, wgpu::{PipelineCompilationOptions}};
+use eframe::{
+    egui_wgpu::{
+        self,
+        wgpu::{self},
+    },
+    wgpu::PipelineCompilationOptions,
+};
 
 use crate::config;
 
@@ -17,19 +20,22 @@ pub fn build_pipeline(
         source: wgpu::ShaderSource::Wgsl(src.into()),
     });
 
-    let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: Some(wgpu::BufferSize::new(std::mem::size_of::<CameraUniform>() as u64).unwrap()),
-            },
-            count: None,
-        }],
-    });
+    let camera_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(
+                        wgpu::BufferSize::new(std::mem::size_of::<CameraUniform>() as u64).unwrap(),
+                    ),
+                },
+                count: None,
+            }],
+        });
 
     let light_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -67,7 +73,7 @@ pub fn build_pipeline(
             &camera_bind_group_layout,
             &light_bind_group_layout,
             &model_bind_group_layout,
-            ],
+        ],
         push_constant_ranges: &[],
     });
 
@@ -96,7 +102,7 @@ pub fn build_pipeline(
             cull_mode: Some(wgpu::Face::Back),
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
-            conservative: false
+            conservative: false,
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
@@ -166,14 +172,14 @@ pub fn build_pipeline(
             model_buffer,
             model_bind_group,
             vertex_buffer,
-            vertex_count
+            vertex_count,
         });
 }
 
 pub struct CustomTriangleCallback {
     pub view_projection: CameraUniform,
     pub light: LightUniform,
-    pub model: ModelUniform
+    pub model: ModelUniform,
 }
 
 impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
@@ -186,7 +192,13 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let resources: &TriangleRenderResources = resources.get().unwrap();
-        resources.prepare(device, queue, &self.view_projection, &self.light, &self.model);
+        resources.prepare(
+            device,
+            queue,
+            &self.view_projection,
+            &self.light,
+            &self.model,
+        );
         Vec::new()
     }
 
@@ -214,22 +226,21 @@ struct TriangleRenderResources {
 }
 
 impl TriangleRenderResources {
-    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue, view_projection: &CameraUniform, light: &LightUniform, model: &ModelUniform) {
+    fn prepare(
+        &self,
+        _device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        view_projection: &CameraUniform,
+        light: &LightUniform,
+        model: &ModelUniform,
+    ) {
         queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[*view_projection]),
         );
-        queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[*light]),
-        );
-        queue.write_buffer(
-            &self.model_buffer,
-            0,
-            bytemuck::cast_slice(&[*model]),
-        );
+        queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[*light]));
+        queue.write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&[*model]));
     }
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
@@ -266,7 +277,11 @@ pub struct Vertex {
 
 impl Vertex {
     pub fn new(position: [f32; 3], normal: [f32; 3], texcoord: [f32; 2]) -> Vertex {
-        Vertex { position, normal, texcoord }
+        Vertex {
+            position,
+            normal,
+            texcoord,
+        }
     }
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -304,7 +319,12 @@ pub struct LightUniform {
 
 impl LightUniform {
     pub fn new() -> LightUniform {
-        return LightUniform { position: [0.0, 3.0, 3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
+        return LightUniform {
+            position: [0.0, 3.0, 3.0],
+            _padding: 0,
+            color: [1., 1., 1.],
+            _padding2: 0,
+        };
     }
 }
 
@@ -316,11 +336,13 @@ pub struct ModelUniform {
 
 impl ModelUniform {
     pub fn new() -> ModelUniform {
-        ModelUniform {model: [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, -3.0, 1.0],
-        ]}
+        ModelUniform {
+            model: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, -3.0, 1.0],
+            ],
+        }
     }
 }

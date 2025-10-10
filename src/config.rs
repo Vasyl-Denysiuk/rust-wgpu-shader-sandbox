@@ -12,7 +12,7 @@ pub trait ShadingModel {
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ShadingModelEnum {
-    Phong
+    Phong,
 }
 
 pub struct Phong {
@@ -28,7 +28,7 @@ impl Phong {
             ka: 0.05,
             kd: 0.4,
             ks: 0.4,
-            alph: 4.0
+            alph: 4.0,
         }
     }
 }
@@ -45,23 +45,26 @@ impl ShadingModel for Phong {
             ui.label("specular strength");
             has_changed |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).changed();
             ui.label("shininess");
-            has_changed |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).changed();
+            has_changed |= ui
+                .add(egui::Slider::new(&mut self.alph, 0.0..=100.0))
+                .changed();
             has_changed
-        }).inner
+        })
+        .inner
     }
 
     fn get_source(&self) -> String {
         let _path: std::path::PathBuf = ["shaders", "phong.wgsl"].iter().collect();
         include_str!("shaders/phong.wgsl").into()
     }
-    
+
     fn get_constants(&self) -> Vec<(&str, f64)> {
-        vec!(
+        vec![
             ("ka", self.ka as f64),
             ("kd", self.kd as f64),
             ("ks", self.ks as f64),
             ("alph", self.alph as f64),
-        )
+        ]
     }
 
     fn as_enum(&self) -> ShadingModelEnum {
