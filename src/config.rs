@@ -40,19 +40,28 @@ impl ShadingModel for Phong {
             ui.style_mut().spacing.slider_width = ui.available_width();
 
             ui.label(format!("ambient strength: {}", self.ka));
-            should_update |= ui.add(egui::Slider::new(&mut self.ka, 0.0..=1.0)).drag_stopped();
+            should_update |= ui
+                .add(egui::Slider::new(&mut self.ka, 0.0..=1.0))
+                .drag_stopped();
 
             ui.label(format!("diffuse strength: {}", self.kd));
-            should_update |= ui.add(egui::Slider::new(&mut self.kd, 0.0..=1.0)).drag_stopped();
+            should_update |= ui
+                .add(egui::Slider::new(&mut self.kd, 0.0..=1.0))
+                .drag_stopped();
 
             ui.label(format!("specular strength: {}", self.ks));
-            should_update |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).drag_stopped();
+            should_update |= ui
+                .add(egui::Slider::new(&mut self.ks, 0.0..=1.0))
+                .drag_stopped();
 
             ui.label(format!("shininess: {}", self.alph));
-            should_update |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).drag_stopped();
+            should_update |= ui
+                .add(egui::Slider::new(&mut self.alph, 0.0..=100.0))
+                .drag_stopped();
 
             should_update
-        }).inner
+        })
+        .inner
     }
 
     fn get_source(&self) -> String {

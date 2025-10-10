@@ -79,8 +79,6 @@ impl eframe::App for App {
             });
         }
 
-
-
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ComboBox::from_label("Select one!")
                 .selected_text(format!("{:?}", self.shader_conf.active_model.as_enum()))

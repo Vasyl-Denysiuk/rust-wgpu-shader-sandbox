@@ -1,4 +1,4 @@
-use eframe::egui_wgpu::{ self, wgpu };
+use eframe::egui_wgpu::{self, wgpu};
 
 use wgpu::PipelineCompilationOptions;
 
@@ -315,7 +315,12 @@ pub struct LightUniform {
 
 impl LightUniform {
     pub fn new() -> LightUniform {
-        return LightUniform { position: [0.0, 3.0, -3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
+        return LightUniform {
+            position: [0.0, 3.0, -3.0],
+            _padding: 0,
+            color: [1., 1., 1.],
+            _padding2: 0,
+        };
     }
 }
 
@@ -327,11 +332,13 @@ pub struct ModelUniform {
 
 impl ModelUniform {
     pub fn new() -> ModelUniform {
-        ModelUniform {model: [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 3.0, 1.0],
-        ]}
+        ModelUniform {
+            model: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 3.0, 1.0],
+            ],
+        }
     }
 }

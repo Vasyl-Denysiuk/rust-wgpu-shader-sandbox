@@ -26,7 +26,7 @@ impl WorldCamera {
             glam::EulerRot::ZXY,
             -self.rotation.z,
             -self.rotation.y,
-            -self.rotation.x
+            -self.rotation.x,
         );
         let translation_matrix = glam::Mat4::from_translation(-self.position);
 
@@ -37,31 +37,42 @@ impl WorldCamera {
     }
 
     pub fn get_rotation_quat(&self) -> glam::Quat {
-        glam::Quat::from_euler(glam::EulerRot::YXZ, self.rotation.x, self.rotation.y, self.rotation.z)
+        glam::Quat::from_euler(
+            glam::EulerRot::YXZ,
+            self.rotation.x,
+            self.rotation.y,
+            self.rotation.z,
+        )
     }
 
     pub fn forward(&mut self) {
-        self.position += self.get_rotation_quat() * glam::Vec3::new(0.0, 0.0, 1.0) * Self::CAM_SPEED;
+        self.position +=
+            self.get_rotation_quat() * glam::Vec3::new(0.0, 0.0, 1.0) * Self::CAM_SPEED;
     }
 
     pub fn backward(&mut self) {
-        self.position -= self.get_rotation_quat() * glam::Vec3::new(0.0, 0.0, 1.0) * Self::CAM_SPEED;
+        self.position -=
+            self.get_rotation_quat() * glam::Vec3::new(0.0, 0.0, 1.0) * Self::CAM_SPEED;
     }
 
     pub fn right(&mut self) {
-        self.position += self.get_rotation_quat() * glam::Vec3::new(1.0, 0.0, 0.0) * Self::CAM_SPEED;
+        self.position +=
+            self.get_rotation_quat() * glam::Vec3::new(1.0, 0.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn left(&mut self) {
-        self.position -= self.get_rotation_quat() * glam::Vec3::new(1.0, 0.0, 0.0) * Self::CAM_SPEED;
+        self.position -=
+            self.get_rotation_quat() * glam::Vec3::new(1.0, 0.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn up(&mut self) {
-        self.position += self.get_rotation_quat() * glam::Vec3::new(0.0, 1.0, 0.0) * Self::CAM_SPEED;
+        self.position +=
+            self.get_rotation_quat() * glam::Vec3::new(0.0, 1.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn down(&mut self) {
-        self.position -= self.get_rotation_quat() * glam::Vec3::new(0.0, 1.0, 0.0) * Self::CAM_SPEED;
+        self.position -=
+            self.get_rotation_quat() * glam::Vec3::new(0.0, 1.0, 0.0) * Self::CAM_SPEED;
     }
 
     pub fn mouse_moved(&mut self, delta: egui::Vec2) {
