@@ -48,10 +48,11 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
                     self.custom_painting(ui);
-                });
+                })
             });
 
-        if viewport_response.response.hovered() {
+        // TODO: checking input after drawing imposes 1 frame delay
+        if viewport_response.response.contains_pointer() {
             if ctx.input(|i| i.key_down(egui::Key::W)) {
                 self.camera.forward();
             }
@@ -67,10 +68,18 @@ impl eframe::App for App {
             if ctx.input(|i| i.key_down(egui::Key::Space)) {
                 self.camera.up();
             }
-            if ctx.input(|i| i.key_down(egui::Key::Enter)) {
+            if ctx.input(|i| i.raw.modifiers.shift) {
                 self.camera.down();
             }
+
+            ctx.input(|i| {
+                if i.pointer.primary_down() {
+                    self.camera.mouse_moved(i.pointer.delta());
+                }
+            });
         }
+
+
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ComboBox::from_label("Select one!")

@@ -50,10 +50,10 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let l = normalize(light.position - in.world_position);
-	let diff = max(0, dot(l, normalize(in.world_normal)));
+    let diff = max(0, dot(l, normalize(in.world_normal)));
     let v = normalize(-in.world_position);
     let r = reflect(-l, in.world_normal);
     let spec = pow(max(dot(v, r), 0.0), alph);
-	let color = vec3f(1.0, 1.0, 0.0)*light.color*(ka+kd*diff+ks*spec);
+    let color = light.color * (ka + kd*diff + ks*spec);
     return vec4f(color, 1.0);
 }
