@@ -1,7 +1,6 @@
-use eframe::{egui_wgpu::{
-    self,
-    wgpu::{self}
-}, wgpu::{PipelineCompilationOptions}};
+use eframe::egui_wgpu::{ self, wgpu };
+
+use wgpu::PipelineCompilationOptions;
 
 use crate::config;
 
@@ -92,7 +91,7 @@ pub fn build_pipeline(
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
+            front_face: wgpu::FrontFace::Cw,
             cull_mode: Some(wgpu::Face::Back),
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
@@ -304,7 +303,7 @@ pub struct LightUniform {
 
 impl LightUniform {
     pub fn new() -> LightUniform {
-        return LightUniform { position: [0.0, 3.0, 3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
+        return LightUniform { position: [0.0, 3.0, -3.0], _padding: 0, color: [1., 1., 1.], _padding2: 0 }
     }
 }
 
@@ -320,7 +319,7 @@ impl ModelUniform {
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, -3.0, 1.0],
+            [0.0, 0.0, 3.0, 1.0],
         ]}
     }
 }

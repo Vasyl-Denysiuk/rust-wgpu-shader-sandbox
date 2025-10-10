@@ -36,17 +36,22 @@ impl Phong {
 impl ShadingModel for Phong {
     fn build_widget(&mut self, ui: &mut egui::Ui) -> bool {
         ui.vertical(|ui| {
-            let mut has_changed = false;
+            let mut should_update = false;
             ui.style_mut().spacing.slider_width = ui.available_width();
-            ui.label("ambient strength");
-            has_changed |= ui.add(egui::Slider::new(&mut self.ka, 0.0..=1.0)).changed();
-            ui.label("diffuse strength");
-            has_changed |= ui.add(egui::Slider::new(&mut self.kd, 0.0..=1.0)).changed();
-            ui.label("specular strength");
-            has_changed |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).changed();
-            ui.label("shininess");
-            has_changed |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).changed();
-            has_changed
+
+            ui.label(format!("ambient strength: {}", self.ka));
+            should_update |= ui.add(egui::Slider::new(&mut self.ka, 0.0..=1.0)).drag_stopped();
+
+            ui.label(format!("diffuse strength: {}", self.kd));
+            should_update |= ui.add(egui::Slider::new(&mut self.kd, 0.0..=1.0)).drag_stopped();
+
+            ui.label(format!("specular strength: {}", self.ks));
+            should_update |= ui.add(egui::Slider::new(&mut self.ks, 0.0..=1.0)).drag_stopped();
+
+            ui.label(format!("shininess: {}", self.alph));
+            should_update |= ui.add(egui::Slider::new(&mut self.alph, 0.0..=100.0)).drag_stopped();
+
+            should_update
         }).inner
     }
 
@@ -54,7 +59,7 @@ impl ShadingModel for Phong {
         let _path: std::path::PathBuf = ["shaders", "phong.wgsl"].iter().collect();
         include_str!("shaders/phong.wgsl").into()
     }
-    
+
     fn get_constants(&self) -> Vec<(&str, f64)> {
         vec!(
             ("ka", self.ka as f64),
