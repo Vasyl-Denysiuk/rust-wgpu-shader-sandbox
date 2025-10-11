@@ -1,7 +1,7 @@
-pub mod camera;
-pub mod config;
-pub mod object;
-pub mod renderer;
+mod camera;
+mod config;
+mod object;
+mod renderer;
 
 use eframe::egui_wgpu;
 
@@ -16,7 +16,7 @@ pub struct App {
 impl App {
     pub fn new<'a>(cc: &'a eframe::CreationContext<'a>) -> Option<Self> {
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
-        renderer::build_pipeline(wgpu_render_state, &None, &config::Phong::new());
+        renderer::build_pipeline(wgpu_render_state, &None, &config::phong::Phong::new());
 
         Some(Self {
             camera: camera::WorldCamera::new(),
@@ -24,7 +24,7 @@ impl App {
             model: renderer::ModelUniform::new(),
             object: object::Object::default(),
             shader_conf: config::ShaderConfig {
-                active_model: Box::new(config::Phong::new()),
+                active_model: Box::new(config::phong::Phong::new()),
             },
         })
     }
@@ -51,7 +51,6 @@ impl eframe::App for App {
                 })
             });
 
-        // TODO: checking input after drawing imposes 1 frame delay
         if viewport_response.response.contains_pointer() {
             if ctx.input(|i| i.key_down(egui::Key::W)) {
                 self.camera.forward();
@@ -96,7 +95,10 @@ impl eframe::App for App {
             }
             if self.object.build_widget(ui, ctx) {
                 if let Some(rs) = frame.wgpu_render_state() {
-                    self.reload_shader(&rs);
+                    object::Object::update_obj(
+                        &rs,
+                        &self.object.opened_file.as_ref().map(|p| p.as_path()),
+                    );
                 }
             };
         });
@@ -110,7 +112,7 @@ impl App {
 
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
             rect,
-            renderer::CustomTriangleCallback {
+            renderer::ObjectRenderCallback {
                 view_projection: renderer::CameraUniform::from_camera(&self.camera),
                 light: self.light,
                 model: self.model,

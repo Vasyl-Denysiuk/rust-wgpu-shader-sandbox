@@ -15,7 +15,7 @@ impl WorldCamera {
             position: glam::vec3(0.0, 0.0, 0.0),
             rotation: glam::vec3(0.0, 0.0, 0.0),
             aspect: 1.,
-            fovy: 45f32.to_radians(),
+            fovy: 90f32.to_radians(),
             z_near: 0.1,
             z_far: 100.0,
         }
@@ -78,7 +78,7 @@ impl WorldCamera {
     pub fn mouse_moved(&mut self, delta: egui::Vec2) {
         const MOUSE_SENSETIVITY: f32 = 0.002;
 
-        self.rotation.x += delta.x * MOUSE_SENSETIVITY;
+        self.rotation.x -= delta.x * MOUSE_SENSETIVITY;
         self.rotation.y += delta.y * MOUSE_SENSETIVITY;
     }
 

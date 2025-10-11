@@ -6,7 +6,7 @@ use crate::config;
 
 pub fn build_pipeline(
     render_state: &egui_wgpu::RenderState,
-    obj_path: &Option<&std::path::Path>,
+    path: &Option<&std::path::Path>,
     shading_model: &dyn config::ShadingModel,
 ) {
     let src = shading_model.get_source();
@@ -154,12 +154,14 @@ pub fn build_pipeline(
         label: None,
     });
 
-    let (vertex_buffer, vertex_count) = crate::object::Object::load_obj(render_state, obj_path);
+    let (vertex_buffer, vertex_count) = crate::object::Object::load_obj(render_state, path);
+
+    crate::object::Object::load_obj(render_state, path);
     render_state
         .renderer
         .write()
         .callback_resources
-        .insert(TriangleRenderResources {
+        .insert(ObjectRenderResources {
             pipeline,
             camera_bind_group,
             camera_buffer,
@@ -172,13 +174,13 @@ pub fn build_pipeline(
         });
 }
 
-pub struct CustomTriangleCallback {
+pub struct ObjectRenderCallback {
     pub view_projection: CameraUniform,
     pub light: LightUniform,
     pub model: ModelUniform,
 }
 
-impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
+impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
     fn prepare(
         &self,
         device: &wgpu::Device,
@@ -187,7 +189,7 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
         _egui_encoder: &mut wgpu::CommandEncoder,
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        let resources: &TriangleRenderResources = resources.get().unwrap();
+        let resources: &ObjectRenderResources = resources.get().unwrap();
         resources.prepare(
             device,
             queue,
@@ -204,12 +206,12 @@ impl egui_wgpu::CallbackTrait for CustomTriangleCallback {
         render_pass: &mut wgpu::RenderPass<'static>,
         resources: &egui_wgpu::CallbackResources,
     ) {
-        let resources: &TriangleRenderResources = resources.get().unwrap();
+        let resources: &ObjectRenderResources = resources.get().unwrap();
         resources.paint(render_pass);
     }
 }
 
-struct TriangleRenderResources {
+pub struct ObjectRenderResources {
     pipeline: wgpu::RenderPipeline,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -221,7 +223,12 @@ struct TriangleRenderResources {
     vertex_count: u32,
 }
 
-impl TriangleRenderResources {
+impl ObjectRenderResources {
+    pub fn set_vertex_buffer(&mut self, vertex_buffer: wgpu::Buffer, vertex_count: u32) {
+        self.vertex_buffer = vertex_buffer;
+        self.vertex_count = vertex_count;
+    }
+
     fn prepare(
         &self,
         _device: &wgpu::Device,
