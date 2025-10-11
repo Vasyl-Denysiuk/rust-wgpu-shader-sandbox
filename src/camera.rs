@@ -12,7 +12,7 @@ impl WorldCamera {
 
     pub fn new() -> WorldCamera {
         WorldCamera {
-            position: glam::vec3(0.0, 0.0, 0.0),
+            position: glam::vec3(0.0, 0.0, -3.0),
             rotation: glam::vec3(0.0, 0.0, 0.0),
             aspect: 1.,
             fovy: 90f32.to_radians(),
@@ -34,6 +34,10 @@ impl WorldCamera {
         let proj = glam::Mat4::perspective_lh(self.fovy, self.aspect, self.z_near, self.z_far);
 
         proj * view
+    }
+
+    pub fn get_position(&self) -> [f32; 3] {
+        self.position.to_array()
     }
 
     pub fn get_rotation_quat(&self) -> glam::Quat {

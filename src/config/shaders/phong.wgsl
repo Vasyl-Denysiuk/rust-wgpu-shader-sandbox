@@ -1,10 +1,6 @@
-override ka: f32 = 0.05;
-override kd: f32 = 0.4;
-override ks: f32 = 0.4;
-override alph: f32 = 4.0;
-
 struct CameraUniform {
     view_proj: mat4x4<f32>,
+    position: vec3<f32>,
 };
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
@@ -16,11 +12,14 @@ struct Light {
 @group(1) @binding(0)
 var<uniform> light: Light;
 
-struct ModelUniform {
-    model_transform: mat4x4<f32>,
+struct Phong {
+    ka: f32,
+    kd: f32,
+    ks: f32,
+    alph: f32,
 }
 @group(2) @binding(0)
-var<uniform> model: ModelUniform;
+var<uniform> phong: Phong;
 
 
 struct VertexInput {
@@ -39,10 +38,10 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    let world_pos = model.model_transform * vec4<f32>(in.position, 1.0);
+    let world_pos = vec4<f32>(in.position, 1.0);
     out.world_position = world_pos.xyz;
     out.clip_position = camera.view_proj * world_pos;
-    out.world_normal = in.normal;
+    out.world_normal = normalize(in.normal);
     out.texcoord = in.texcoord;
     return out;
 }
@@ -50,10 +49,10 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let l = normalize(light.position - in.world_position);
-    let diff = max(0, dot(l, normalize(in.world_normal)));
-    let v = normalize(-in.world_position);
+    let diff = max(0.0, dot(l, in.world_normal));
+    let v = normalize(camera.position - in.world_position);
     let r = reflect(-l, in.world_normal);
-    let spec = pow(max(dot(v, r), 0.0), alph);
-    let color = light.color * (ka + kd*diff + ks*spec);
-    return vec4f(color, 1.0);
+    let spec = pow(max(0.0, dot(v, r)), phong.alph);
+    let color = light.color * (phong.ka + phong.kd*diff + phong.ks*spec);
+    return vec4<f32>(color, 1.0);
 }

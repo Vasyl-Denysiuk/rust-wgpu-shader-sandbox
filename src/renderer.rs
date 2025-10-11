@@ -1,13 +1,14 @@
 use eframe::egui_wgpu::{self, wgpu};
+use std::sync::{Arc, Mutex};
 
 use wgpu::PipelineCompilationOptions;
 
-use crate::config;
+use crate::config::{self, ShadingModel};
 
 pub fn build_pipeline(
     render_state: &egui_wgpu::RenderState,
     path: &Option<&std::path::Path>,
-    shading_model: &dyn config::ShadingModel,
+    shading_model: &(impl config::ShadingModel + ?Sized),
 ) {
     let src = shading_model.get_source();
     let device = &render_state.device;
@@ -21,7 +22,7 @@ pub fn build_pipeline(
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -32,79 +33,6 @@ pub fn build_pipeline(
                 count: None,
             }],
         });
-
-    let light_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-            label: None,
-        });
-
-    let model_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-            label: None,
-        });
-
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[
-            &camera_bind_group_layout,
-            &light_bind_group_layout,
-            &model_bind_group_layout,
-        ],
-        push_constant_ranges: &[],
-    });
-
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            buffers: &[Vertex::desc()],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main"),
-            targets: &[Some(render_state.target_format.into())],
-            compilation_options: PipelineCompilationOptions {
-                constants: shading_model.get_constants().as_slice(),
-                ..Default::default()
-            },
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Cw,
-            cull_mode: Some(wgpu::Face::Back),
-            unclipped_depth: false,
-            polygon_mode: wgpu::PolygonMode::Fill,
-            conservative: false,
-        },
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-        cache: None,
-    });
 
     let camera_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
@@ -122,6 +50,21 @@ pub fn build_pipeline(
         }],
     });
 
+    let light_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: None,
+        });
+
     let light_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: std::mem::size_of::<LightUniform>() as u64,
@@ -138,20 +81,47 @@ pub fn build_pipeline(
         label: None,
     });
 
-    let model_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
+    let (params_bind_group_layout, params_bind_group, params_buffer) =
+        shading_model.create_uniform(device);
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
-        size: std::mem::size_of::<ModelUniform>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
+        bind_group_layouts: &[
+            &camera_bind_group_layout,
+            &light_bind_group_layout,
+            &params_bind_group_layout,
+        ],
+        push_constant_ranges: &[],
     });
 
-    let model_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: &model_bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: model_buffer.as_entire_binding(),
-        }],
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[Vertex::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(render_state.target_format.into())],
+            compilation_options: PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Cw,
+            cull_mode: Some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
     });
 
     let (vertex_buffer, vertex_count) = crate::object::Object::load_obj(render_state, path);
@@ -167,8 +137,8 @@ pub fn build_pipeline(
             camera_buffer,
             light_buffer,
             light_bind_group,
-            model_buffer,
-            model_bind_group,
+            params_buffer,
+            params_bind_group,
             vertex_buffer,
             vertex_count,
         });
@@ -177,7 +147,7 @@ pub fn build_pipeline(
 pub struct ObjectRenderCallback {
     pub view_projection: CameraUniform,
     pub light: LightUniform,
-    pub model: ModelUniform,
+    pub params: Arc<Mutex<dyn ShadingModel + Send>>,
 }
 
 impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
@@ -195,7 +165,7 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             queue,
             &self.view_projection,
             &self.light,
-            &self.model,
+            self.params.clone(),
         );
         Vec::new()
     }
@@ -217,8 +187,8 @@ pub struct ObjectRenderResources {
     camera_bind_group: wgpu::BindGroup,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
-    model_buffer: wgpu::Buffer,
-    model_bind_group: wgpu::BindGroup,
+    params_buffer: wgpu::Buffer,
+    params_bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
 }
@@ -235,7 +205,7 @@ impl ObjectRenderResources {
         queue: &wgpu::Queue,
         view_projection: &CameraUniform,
         light: &LightUniform,
-        model: &ModelUniform,
+        params: Arc<Mutex<dyn ShadingModel + Send>>,
     ) {
         queue.write_buffer(
             &self.camera_buffer,
@@ -243,14 +213,14 @@ impl ObjectRenderResources {
             bytemuck::cast_slice(&[*view_projection]),
         );
         queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[*light]));
-        queue.write_buffer(&self.model_buffer, 0, bytemuck::cast_slice(&[*model]));
+        queue.write_buffer(&self.params_buffer, 0, params.lock().unwrap().to_params());
     }
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
         render_pass.set_bind_group(1, &self.light_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.model_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.params_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..self.vertex_count, 0..1);
     }
@@ -260,12 +230,16 @@ impl ObjectRenderResources {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
     pub view_proj: [[f32; 4]; 4],
+    pub position: [f32; 3],
+    _padding: f32,
 }
 
 impl CameraUniform {
     pub fn from_camera(camera: &crate::camera::WorldCamera) -> Self {
         Self {
             view_proj: camera.build_view_projection().to_cols_array_2d(),
+            position: camera.get_position(),
+            _padding: 0.0,
         }
     }
 }
@@ -322,30 +296,11 @@ pub struct LightUniform {
 
 impl LightUniform {
     pub fn new() -> LightUniform {
-        return LightUniform {
+        LightUniform {
             position: [0.0, 3.0, -3.0],
             _padding: 0,
             color: [1., 1., 1.],
             _padding2: 0,
-        };
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ModelUniform {
-    pub model: [[f32; 4]; 4],
-}
-
-impl ModelUniform {
-    pub fn new() -> ModelUniform {
-        ModelUniform {
-            model: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 3.0, 1.0],
-            ],
         }
     }
 }

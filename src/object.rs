@@ -1,6 +1,6 @@
 use eframe::egui_wgpu::wgpu::util::DeviceExt as _;
 
-const DEFAULT_OBJECT_PATH: &str = "./test1.obj";
+const DEFAULT_OBJECT_PATH: &str = "./objects/test1.obj";
 
 use egui_file::FileDialog;
 use std::{

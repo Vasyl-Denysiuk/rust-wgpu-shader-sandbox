@@ -3,6 +3,8 @@ mod config;
 mod object;
 mod renderer;
 
+use std::sync::{Arc, Mutex};
+
 use eframe::egui_wgpu;
 
 pub struct App {
@@ -10,7 +12,6 @@ pub struct App {
     object: object::Object,
     camera: camera::WorldCamera,
     light: renderer::LightUniform,
-    model: renderer::ModelUniform,
 }
 
 impl App {
@@ -21,10 +22,9 @@ impl App {
         Some(Self {
             camera: camera::WorldCamera::new(),
             light: renderer::LightUniform::new(),
-            model: renderer::ModelUniform::new(),
             object: object::Object::default(),
             shader_conf: config::ShaderConfig {
-                active_model: Box::new(config::phong::Phong::new()),
+                active_model: Arc::new(Mutex::new(config::phong::Phong::new())),
             },
         })
     }
@@ -32,8 +32,8 @@ impl App {
     fn reload_shader(&self, render_state: &egui_wgpu::RenderState) {
         renderer::build_pipeline(
             render_state,
-            &self.object.opened_file.as_ref().map(|p| p.as_path()),
-            &*self.shader_conf.active_model,
+            &self.object.opened_file.as_deref(),
+            &*(self.shader_conf.active_model).lock().unwrap(),
         );
     }
 }
@@ -80,25 +80,31 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ComboBox::from_label("Select one!")
-                .selected_text(format!("{:?}", self.shader_conf.active_model.as_enum()))
+                .selected_text(format!(
+                    "{:?}",
+                    self.shader_conf.active_model.lock().unwrap().as_enum()
+                ))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(
-                        &mut self.shader_conf.active_model.as_enum(),
+                        &mut self.shader_conf.active_model.lock().unwrap().as_enum(),
                         config::ShadingModelEnum::Phong,
                         "Phong",
                     );
                 });
-            if self.shader_conf.active_model.build_widget(ui) {
+            if self
+                .shader_conf
+                .active_model
+                .lock()
+                .unwrap()
+                .build_widget(ui)
+            {
                 if let Some(rs) = frame.wgpu_render_state() {
-                    self.reload_shader(&rs);
+                    self.reload_shader(rs);
                 }
             }
             if self.object.build_widget(ui, ctx) {
                 if let Some(rs) = frame.wgpu_render_state() {
-                    object::Object::update_obj(
-                        &rs,
-                        &self.object.opened_file.as_ref().map(|p| p.as_path()),
-                    );
+                    object::Object::update_obj(rs, &self.object.opened_file.as_deref());
                 }
             };
         });
@@ -115,7 +121,7 @@ impl App {
             renderer::ObjectRenderCallback {
                 view_projection: renderer::CameraUniform::from_camera(&self.camera),
                 light: self.light,
-                model: self.model,
+                params: self.shader_conf.active_model.clone(),
             },
         ));
     }
