@@ -1,8 +1,10 @@
+pub mod flat;
 pub mod phong;
 use std::sync::{Arc, Mutex};
 
 pub struct ShaderConfig {
     pub active_model: Arc<Mutex<dyn ShadingModel + Send>>,
+    //pub active_post_effects: Vec<Arc<Mutex<Box<dyn PostEffect + Send>>>>
 }
 
 pub trait ShadingModel {
@@ -23,4 +25,5 @@ pub trait ShadingModel {
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ShadingModelEnum {
     Phong,
+    Flat,
 }

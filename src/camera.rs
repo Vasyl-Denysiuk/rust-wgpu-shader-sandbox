@@ -21,7 +21,13 @@ impl WorldCamera {
         }
     }
 
-    pub fn build_view_projection(&self) -> glam::Mat4 {
+    pub fn build_projection(&self) -> glam::Mat4 {
+        let proj = glam::Mat4::perspective_lh(self.fovy, self.aspect, self.z_near, self.z_far);
+
+        proj
+    }
+
+    pub fn build_view(&self) -> glam::Mat4 {
         let rotation_matrix = glam::Mat4::from_euler(
             glam::EulerRot::ZXY,
             -self.rotation.z,
@@ -29,15 +35,9 @@ impl WorldCamera {
             -self.rotation.x,
         );
         let translation_matrix = glam::Mat4::from_translation(-self.position);
-
         let view = rotation_matrix * translation_matrix;
-        let proj = glam::Mat4::perspective_lh(self.fovy, self.aspect, self.z_near, self.z_far);
 
-        proj * view
-    }
-
-    pub fn get_position(&self) -> [f32; 3] {
-        self.position.to_array()
+        view
     }
 
     pub fn get_rotation_quat(&self) -> glam::Quat {

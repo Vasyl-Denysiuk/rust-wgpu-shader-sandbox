@@ -1,0 +1,6 @@
+1. light settings, including position, colour, visibility
+2. pipeline settings, including culling scheme, camera mode
+3. texture loading
+4. new shading models, effects
+5. fix triangulation with tobj
+6. README.md file

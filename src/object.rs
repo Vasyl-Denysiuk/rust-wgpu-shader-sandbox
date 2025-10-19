@@ -16,13 +16,27 @@ pub struct Object {
     open_file_dialog: Option<FileDialog>,
 }
 
+pub struct Material {
+    pub name: String,
+    pub diffuse_texture: eframe::egui_wgpu::Texture,
+    pub bind_group: eframe::wgpu::BindGroup,
+}
+
+pub struct Mesh {
+    pub name: String,
+    pub vertex_buffer: eframe::wgpu::Buffer,
+    pub index_buffer: eframe::wgpu::Buffer,
+    pub num_elements: u32,
+    pub material: usize,
+}
+
 impl Object {
     pub fn load_obj(
         render_state: &egui_wgpu::RenderState,
         path: &Option<&std::path::Path>,
     ) -> (eframe::wgpu::Buffer, u32) {
         let path = path.unwrap_or(std::path::Path::new(DEFAULT_OBJECT_PATH));
-        let (models, _materials) = tobj::load_obj(
+        let (models, obj_materials) = tobj::load_obj(
             path,
             &tobj::LoadOptions {
                 triangulate: true,
@@ -31,6 +45,13 @@ impl Object {
             },
         )
         .expect("Failed to load OBJ file");
+
+        if let Ok(mat) = obj_materials {
+            if let Some(texture_path) = &mat[0].diffuse_texture {
+                todo!()
+            }
+        }
+
         let mesh = &models[0].mesh;
 
         let mut vertices = Vec::new();

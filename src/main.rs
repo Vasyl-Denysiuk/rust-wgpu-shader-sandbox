@@ -12,6 +12,7 @@ pub struct App {
     object: object::Object,
     camera: camera::WorldCamera,
     light: renderer::LightUniform,
+    viewport_size: Option<egui::Vec2>,
 }
 
 impl App {
@@ -26,6 +27,7 @@ impl App {
             shader_conf: config::ShaderConfig {
                 active_model: Arc::new(Mutex::new(config::phong::Phong::new())),
             },
+            viewport_size: None,
         })
     }
 
@@ -40,13 +42,25 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.camera
-            .resize(0.5 * ctx.available_rect().width() / ctx.available_rect().height());
-
         let viewport_response = egui::SidePanel::left("viewport_panel")
+            .resizable(false)
             .exact_width(ctx.available_rect().width() * 0.5)
             .show(ctx, |ui| {
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                    let size = ui.available_size();
+                    if self.viewport_size.map_or(true, |current| current != size) {
+                        self.camera.resize(size.x / size.y);
+                        let pixels_per_point = ctx.pixels_per_point();
+                        let size_in_pixels = (
+                            (size.x * pixels_per_point).round() as u32,
+                            (size.y * pixels_per_point).round() as u32,
+                        );
+                        self.viewport_size = Some(size);
+                        if let Some(rs) = frame.wgpu_render_state() {
+                            renderer::post_process_init(rs, size_in_pixels);
+                        }
+                    }
+                    self.camera.resize(size.x / size.y);
                     self.custom_painting(ui);
                 })
             });
@@ -79,18 +93,22 @@ impl eframe::App for App {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ComboBox::from_label("Select one!")
+            let current = &mut self.shader_conf.active_model.lock().unwrap().as_enum();
+            egui::ComboBox::from_label("Select active shading model!")
                 .selected_text(format!(
                     "{:?}",
-                    self.shader_conf.active_model.lock().unwrap().as_enum()
+                    current
                 ))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.shader_conf.active_model.lock().unwrap().as_enum(),
-                        config::ShadingModelEnum::Phong,
-                        "Phong",
-                    );
+                    ui.selectable_value(current, config::ShadingModelEnum::Phong, "Phong");
+                    ui.selectable_value(current, config::ShadingModelEnum::Flat, "Flat");
                 });
+            if *current != self.shader_conf.active_model.lock().unwrap().as_enum() {
+                self.shader_conf.active_model = match current {
+                    config::ShadingModelEnum::Phong => Arc::new(Mutex::new(crate::config::phong::Phong::new())),
+                    config::ShadingModelEnum::Flat => Arc::new(Mutex::new(crate::config::flat::Flat::new())),
+                }
+            }
             if self
                 .shader_conf
                 .active_model

@@ -10,4 +10,4 @@ egui = "0.32.3"
 egui-wgpu = { version = "0.32.3", features = ["wayland", "winit"] }
 egui_file = "0.23.1"
 glam = "0.30.8"
-tobj = "4.0.3"
+tobj = { version = "4.0.3", default-features = false, features = ["async"]} 
