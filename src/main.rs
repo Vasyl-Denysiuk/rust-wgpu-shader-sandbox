@@ -26,6 +26,7 @@ impl App {
             object: object::Object::default(),
             shader_conf: config::ShaderConfig {
                 active_model: Arc::new(Mutex::new(config::phong::Phong::new())),
+                active_post_effects: Vec::new(),
             },
             viewport_size: None,
         })
@@ -57,7 +58,7 @@ impl eframe::App for App {
                         );
                         self.viewport_size = Some(size);
                         if let Some(rs) = frame.wgpu_render_state() {
-                            renderer::post_process_init(rs, size_in_pixels);
+                            renderer::post_effect_init(rs, size_in_pixels);
                         }
                     }
                     self.camera.resize(size.x / size.y);
@@ -139,7 +140,8 @@ impl App {
             renderer::ObjectRenderCallback {
                 view_projection: renderer::CameraUniform::from_camera(&self.camera),
                 light: self.light,
-                params: self.shader_conf.active_model.clone(),
+                shading_model: self.shader_conf.active_model.clone(),
+                post_effects: self.shader_conf.active_post_effects.clone(),
             },
         ));
     }

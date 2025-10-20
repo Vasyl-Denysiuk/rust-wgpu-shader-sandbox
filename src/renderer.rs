@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use wgpu::PipelineCompilationOptions;
 
-use crate::config::{self, ShadingModel};
+use crate::config::{self, PostEffect, ShadingModel};
 
 pub fn build_pipeline(
     render_state: &egui_wgpu::RenderState,
@@ -91,13 +91,15 @@ pub fn build_pipeline(
 }
 
 pub struct PostProcessResources {
-    texture_view: wgpu::TextureView,
-    bind_group: wgpu::BindGroup,
+    texture_view_a: wgpu::TextureView,
+    texture_view_b: wgpu::TextureView,
+    bind_group_a: wgpu::BindGroup,
+    bind_group_b: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
 }
 
-pub fn post_process_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)) {
+pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)) {
     let device = &render_state.device;
     let target_format = render_state.target_format;
 
@@ -106,7 +108,7 @@ pub fn post_process_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)
         source: wgpu::ShaderSource::Wgsl(include_str!("post.wgsl").into()),
     });
 
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
+    let tex_desc = &wgpu::TextureDescriptor {
         label: Some("post_process_texture"),
         size: wgpu::Extent3d {
             width: size.0,
@@ -119,8 +121,13 @@ pub fn post_process_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)
         format: target_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[target_format],
-    });
-    let texture_view = texture.create_view(&Default::default());
+    };
+
+    let texture_a = device.create_texture(tex_desc);
+    let texture_b = device.create_texture(tex_desc);
+
+    let texture_view_a = texture_a.create_view(&Default::default());
+    let texture_view_b = texture_b.create_view(&Default::default());
 
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -154,12 +161,27 @@ pub fn post_process_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)
         label: None,
     });
 
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view),
+                resource: wgpu::BindingResource::TextureView(&texture_view_a),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+        ],
+        label: None,
+    });
+
+    let bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&texture_view_b),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -221,8 +243,10 @@ pub fn post_process_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)
     });
 
     let post_process_resources = PostProcessResources {
-        texture_view,
-        bind_group,
+        texture_view_a,
+        texture_view_b,
+        bind_group_a,
+        bind_group_b,
         pipeline,
         vertex_buffer,
     };
@@ -236,10 +260,15 @@ pub fn post_process_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)
         .set_post_process_resources(post_process_resources);
 }
 
+pub fn add_post_effect(render_state: &egui_wgpu::RenderState) {
+
+}
+
 pub struct ObjectRenderCallback {
     pub view_projection: CameraUniform,
     pub light: LightUniform,
-    pub params: Arc<Mutex<dyn ShadingModel + Send>>,
+    pub shading_model: Arc<Mutex<dyn ShadingModel + Send>>,
+    pub post_effects: Vec<Arc<Mutex<dyn PostEffect + Send>>>,
 }
 
 impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
@@ -257,15 +286,14 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             queue,
             &self.view_projection,
             &self.light,
-            self.params.clone(),
+            self.shading_model.clone(),
         );
         if let Some(post) = &resources.post_process_resources {
             let mut encoder = device.create_command_encoder(&Default::default());
-
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &post.texture_view,
+                    view: &post.texture_view_a,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
@@ -343,7 +371,7 @@ impl ObjectRenderResources {
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         if let Some(pp) = &self.post_process_resources {
             render_pass.set_pipeline(&pp.pipeline);
-            render_pass.set_bind_group(0, &pp.bind_group, &[]);
+            render_pass.set_bind_group(0, &pp.bind_group_a, &[]);
             render_pass.set_vertex_buffer(0, pp.vertex_buffer.slice(..));
             render_pass.draw(0..6, 0..1);
         }
