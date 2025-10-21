@@ -1,6 +1,6 @@
 use eframe::egui_wgpu::wgpu::util::DeviceExt as _;
 
-const DEFAULT_OBJECT_PATH: &str = "./objects/test1.obj";
+const DEFAULT_OBJECT_PATH: &str = "./objects/plane.obj";
 
 use egui_file::FileDialog;
 use std::{
@@ -32,19 +32,11 @@ impl Object {
         )
         .expect("Failed to load OBJ file");
 
-        if let Ok(mat) = obj_materials {
-            if let Some(texture_path) = &mat[0].diffuse_texture {
-                let img = image::ImageReader::open(texture_path)
-                    .unwrap()
-                    .decode()
-                    .unwrap();
-            }
-        }
-
         let mesh = &models[0].mesh;
 
         let mut vertices = Vec::new();
-        for i in 0..mesh.positions.len() / 3 {
+        for i in &mesh.indices {
+            let i = *i as usize;
             let position = [
                 mesh.positions[i * 3],
                 mesh.positions[i * 3 + 1],
@@ -92,7 +84,8 @@ impl Object {
         let mesh = &models[0].mesh;
 
         let mut vertices = Vec::new();
-        for i in 0..mesh.positions.len() / 3 {
+        for i in &mesh.indices {
+            let i = *i as usize;
             let position = [
                 mesh.positions[i * 3],
                 mesh.positions[i * 3 + 1],
