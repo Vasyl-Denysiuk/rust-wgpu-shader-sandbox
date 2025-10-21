@@ -42,7 +42,7 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
                     let size = ui.available_size();
-                    if self.viewport_size.map_or(true, |current| current != size) {
+                    if self.viewport_size != Some(size) {
                         self.camera.resize(size.x / size.y);
                         let pixels_per_point = ctx.pixels_per_point();
                         let size_in_pixels = (
@@ -89,18 +89,19 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             let current = &mut self.shader_conf.active_model.lock().unwrap().as_enum();
             egui::ComboBox::from_label("Select active shading model!")
-                .selected_text(format!(
-                    "{:?}",
-                    current
-                ))
+                .selected_text(format!("{current:?}"))
                 .show_ui(ui, |ui| {
                     ui.selectable_value(current, config::ShadingModelEnum::Phong, "Phong");
                     ui.selectable_value(current, config::ShadingModelEnum::Flat, "Flat");
                 });
             if *current != self.shader_conf.active_model.lock().unwrap().as_enum() {
                 self.shader_conf.active_model = match current {
-                    config::ShadingModelEnum::Phong => Arc::new(Mutex::new(crate::config::phong::Phong::new())),
-                    config::ShadingModelEnum::Flat => Arc::new(Mutex::new(crate::config::flat::Flat::new())),
+                    config::ShadingModelEnum::Phong => {
+                        Arc::new(Mutex::new(crate::config::phong::Phong::new()))
+                    }
+                    config::ShadingModelEnum::Flat => {
+                        Arc::new(Mutex::new(crate::config::flat::Flat::new()))
+                    }
                 }
             }
             self.shader_conf
@@ -118,31 +119,41 @@ impl eframe::App for App {
                         .stick_to_bottom(false)
                         .max_height(100.0)
                         .show(ui, |ui| {
-                            self.shader_conf.active_post_effects
-                                .retain(|effect| {
+                            self.shader_conf.active_post_effects.retain(|effect| {
                                 let mut retain = true;
                                 ui.horizontal(|ui| {
                                     ui.label(effect.lock().unwrap().as_enum().to_string());
-                                    ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
-                                        if ui.button("[X]").clicked() {
-                                            retain = false;
-                                        }
-                                    })
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::LEFT),
+                                        |ui| {
+                                            if ui.button("[X]").clicked() {
+                                                retain = false;
+                                            }
+                                        },
+                                    )
                                 });
                                 retain
                             });
                         });
                 });
                 ui.horizontal(|ui| {
-                    let current = &mut self.shader_conf.selected_effect.unwrap_or(config::PostEffectEnum::Negative);
+                    let current = &mut self
+                        .shader_conf
+                        .selected_effect
+                        .unwrap_or(config::PostEffectEnum::Negative);
                     egui::ComboBox::from_label("Add post processing effect!")
-                        .selected_text(format!(
-                            "{:?}",
-                            current
-                        ))
+                        .selected_text(format!("{current:?}"))
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(current, config::PostEffectEnum::Negative, "Negative");
-                            ui.selectable_value(current, config::PostEffectEnum::ChromaticAberration, "ChromaticAberration");
+                            ui.selectable_value(
+                                current,
+                                config::PostEffectEnum::Negative,
+                                "Negative",
+                            );
+                            ui.selectable_value(
+                                current,
+                                config::PostEffectEnum::ChromaticAberration,
+                                "ChromaticAberration",
+                            );
                             ui.selectable_value(current, config::PostEffectEnum::Blur, "Blur");
                         });
                     let active = &self.shader_conf.selected_effect;
@@ -151,9 +162,15 @@ impl eframe::App for App {
                     }
                     if ui.button("[+]").clicked() {
                         self.shader_conf.active_post_effects.push(match current {
-                            config::PostEffectEnum::Negative => Arc::new(Mutex::new(crate::config::negative::Negative::new())),
-                            config::PostEffectEnum::ChromaticAberration => Arc::new(Mutex::new(crate::config::chromatic::ChromaticAberration::new())),
-                            config::PostEffectEnum::Blur => Arc::new(Mutex::new(crate::config::blur::Blur::new())),
+                            config::PostEffectEnum::Negative => {
+                                Arc::new(Mutex::new(crate::config::negative::Negative::new()))
+                            }
+                            config::PostEffectEnum::ChromaticAberration => Arc::new(Mutex::new(
+                                crate::config::chromatic::ChromaticAberration::new(),
+                            )),
+                            config::PostEffectEnum::Blur => {
+                                Arc::new(Mutex::new(crate::config::blur::Blur::new()))
+                            }
                         });
                     }
                 });

@@ -122,14 +122,14 @@ impl PostProcessResources {
             PostProcessTexture::B => PostProcessTexture::A,
         };
     }
-    
+
     fn get_texture_out_view(&self) -> &wgpu::TextureView {
         match self.out {
             PostProcessTexture::A => &self.texture_view_a,
             PostProcessTexture::B => &self.texture_view_b,
         }
     }
-    
+
     fn get_bind_group_in(&self) -> &wgpu::BindGroup {
         match self.out {
             PostProcessTexture::A => &self.bind_group_b,
@@ -202,20 +202,19 @@ pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32))
         ..Default::default()
     });
 
-    let _depth_sampler = device.create_sampler(
-        &wgpu::SamplerDescriptor { // 4.
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            compare: Some(wgpu::CompareFunction::LessEqual), // 5.
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            ..Default::default()
-        }
-    );
+    let _depth_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        // 4.
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        compare: Some(wgpu::CompareFunction::LessEqual), // 5.
+        lod_min_clamp: 0.0,
+        lod_max_clamp: 100.0,
+        ..Default::default()
+    });
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[
@@ -342,7 +341,11 @@ pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32))
         .set_post_process_resources(post_process_resources);
 }
 
-pub fn create_post_pipeline(device: &wgpu::Device, target_format: wgpu::TextureFormat, src: String) ->wgpu::RenderPipeline {
+pub fn create_post_pipeline(
+    device: &wgpu::Device,
+    target_format: wgpu::TextureFormat,
+    src: String,
+) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(src.into()),
@@ -436,7 +439,7 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &post.get_texture_out_view(),
+                    view: post.get_texture_out_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
@@ -462,7 +465,7 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             pass.set_vertex_buffer(0, resources.vertex_buffer.slice(..));
             pass.draw(0..resources.vertex_count, 0..1);
             drop(pass);
-            
+
             for post_effect in self.post_effects.iter() {
                 let mut post_guard = post_effect.lock().unwrap();
                 let post_effect_pipeline = post_guard.get_pipeline(device, post.target_format);
@@ -533,7 +536,11 @@ impl ObjectRenderResources {
         light: &LightUniform,
         params: Arc<Mutex<dyn ShadingModel + Send>>,
     ) {
-        queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[*view_projection]));
+        queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[*view_projection]),
+        );
         queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[*light]));
         queue.write_buffer(&self.params_buffer, 0, params.lock().unwrap().to_params());
     }
@@ -541,7 +548,7 @@ impl ObjectRenderResources {
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         if let Some(pp) = &self.post_process_resources {
             render_pass.set_pipeline(&pp.pipeline);
-            render_pass.set_bind_group(0, &pp.bind_group_a, &[]);
+            render_pass.set_bind_group(0, pp.get_final_bind_group(), &[]);
             render_pass.set_vertex_buffer(0, pp.vertex_buffer.slice(..));
             render_pass.draw(0..6, 0..1);
         }

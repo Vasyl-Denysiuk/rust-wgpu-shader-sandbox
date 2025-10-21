@@ -2,7 +2,6 @@ use eframe::egui_wgpu::wgpu::util::DeviceExt as _;
 
 const DEFAULT_OBJECT_PATH: &str = "./objects/test1.obj";
 
-use egui::text;
 use egui_file::FileDialog;
 use std::{
     ffi::OsStr,
@@ -35,8 +34,10 @@ impl Object {
 
         if let Ok(mat) = obj_materials {
             if let Some(texture_path) = &mat[0].diffuse_texture {
-                let img = image::ImageReader::open(texture_path).unwrap().decode().unwrap();
-                
+                let img = image::ImageReader::open(texture_path)
+                    .unwrap()
+                    .decode()
+                    .unwrap();
             }
         }
 

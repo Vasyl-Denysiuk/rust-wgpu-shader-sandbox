@@ -1,14 +1,14 @@
-pub mod flat;
-pub mod phong;
-pub mod negative;
 pub mod blur;
 pub mod chromatic;
+pub mod flat;
+pub mod negative;
+pub mod phong;
 use std::sync::{Arc, Mutex};
 
 pub struct ShaderConfig {
     pub active_model: Arc<Mutex<dyn ShadingModel + Send>>,
     pub active_post_effects: Vec<Arc<Mutex<dyn PostEffect + Send>>>,
-    pub selected_effect: Option<PostEffectEnum>
+    pub selected_effect: Option<PostEffectEnum>,
 }
 
 pub trait ShadingModel {
@@ -28,7 +28,11 @@ pub trait ShadingModel {
 
 pub trait PostEffect {
     fn get_source(&self) -> String;
-    fn get_pipeline(&mut self, device: &eframe::wgpu::Device, target_format: eframe::wgpu::TextureFormat) -> &egui_wgpu::wgpu::RenderPipeline;
+    fn get_pipeline(
+        &mut self,
+        device: &eframe::wgpu::Device,
+        target_format: eframe::wgpu::TextureFormat,
+    ) -> &egui_wgpu::wgpu::RenderPipeline;
     fn as_enum(&self) -> PostEffectEnum;
 }
 
@@ -47,6 +51,6 @@ pub enum PostEffectEnum {
 
 impl std::fmt::Display for PostEffectEnum {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }

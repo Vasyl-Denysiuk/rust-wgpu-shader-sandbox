@@ -1,7 +1,7 @@
 use crate::{config::PostEffect, renderer};
 
 pub struct Negative {
-    pipeline: Option<egui_wgpu::wgpu::RenderPipeline>
+    pipeline: Option<egui_wgpu::wgpu::RenderPipeline>,
 }
 
 impl PostEffect for Negative {
@@ -13,17 +13,25 @@ impl PostEffect for Negative {
     fn as_enum(&self) -> super::PostEffectEnum {
         super::PostEffectEnum::Negative
     }
-    
-    fn get_pipeline(&mut self, device: &eframe::wgpu::Device, target_format: eframe::wgpu::TextureFormat) -> &egui_wgpu::wgpu::RenderPipeline {
+
+    fn get_pipeline(
+        &mut self,
+        device: &eframe::wgpu::Device,
+        target_format: eframe::wgpu::TextureFormat,
+    ) -> &egui_wgpu::wgpu::RenderPipeline {
         if self.pipeline.is_none() {
-            self.pipeline = Some(renderer::create_post_pipeline(device, target_format, self.get_source()));
+            self.pipeline = Some(renderer::create_post_pipeline(
+                device,
+                target_format,
+                self.get_source(),
+            ));
         }
-        &self.pipeline.as_ref().unwrap()
+        self.pipeline.as_ref().unwrap()
     }
 }
 
 impl Negative {
     pub fn new() -> Negative {
-        Negative {pipeline: None}
+        Negative { pipeline: None }
     }
 }
