@@ -1,6 +1,7 @@
 use eframe::egui_wgpu::wgpu::util::DeviceExt as _;
+use eframe::egui_wgpu::wgpu;
 
-const DEFAULT_OBJECT_PATH: &str = "./objects/plane.obj";
+const DEFAULT_OBJECT_PATH: &str = "./objects/test1.obj";
 
 use egui_file::FileDialog;
 use std::{
@@ -20,7 +21,7 @@ impl Object {
     pub fn load_obj(
         render_state: &egui_wgpu::RenderState,
         path: &Option<&std::path::Path>,
-    ) -> (eframe::wgpu::Buffer, u32) {
+    ) -> (wgpu::Buffer, u32, Option<wgpu::TextureView>, Option<wgpu::Sampler>) {
         let path = path.unwrap_or(std::path::Path::new(DEFAULT_OBJECT_PATH));
         let (models, obj_materials) = tobj::load_obj(
             path,
@@ -31,6 +32,59 @@ impl Object {
             },
         )
         .expect("Failed to load OBJ file");
+
+        let mut texture_view = None;
+        let mut texture_sampler = None;
+
+        if let Ok(materials) = obj_materials {
+            if let Some(mat) = materials.first() {
+                if let Some(texture) = &mat.diffuse_texture {
+                    eprintln!("{texture:?}");
+                    let img = image::open(texture).expect("no image");
+                    let rgba = img.to_rgba8();
+                    let size = wgpu::Extent3d {
+                        width: rgba.width(),
+                        height: rgba.height(),
+                        depth_or_array_layers: 1,
+                    };
+                    let texture = render_state.device.create_texture(&wgpu::TextureDescriptor {
+                        label: None,
+                        size,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+                    render_state.queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &rgba, 
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * rgba.width()),
+                            rows_per_image: Some(rgba.height()),
+                        },
+                        size
+                    );
+                    texture_view = Some(texture.create_view(&wgpu::TextureViewDescriptor::default()));
+                    texture_sampler = Some(render_state.device.create_sampler(&wgpu::SamplerDescriptor {
+                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                        address_mode_w: wgpu::AddressMode::ClampToEdge,
+                        mag_filter: wgpu::FilterMode::Linear,
+                        min_filter: wgpu::FilterMode::Nearest,
+                        mipmap_filter: wgpu::FilterMode::Nearest,
+                        ..Default::default()
+                    }));
+                }
+            }
+        }
 
         let mesh = &models[0].mesh;
 
@@ -67,7 +121,7 @@ impl Object {
                     contents: bytemuck::cast_slice(&vertices),
                     usage: eframe::wgpu::BufferUsages::VERTEX,
                 });
-        (vertex_buffer, vertices.len() as u32)
+        (vertex_buffer, vertices.len() as u32, texture_view, texture_sampler)
     }
 
     pub fn update_obj(render_state: &egui_wgpu::RenderState, path: &Option<&std::path::Path>) {

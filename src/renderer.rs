@@ -29,12 +29,104 @@ pub fn build_pipeline(
     let (params_bind_group_layout, params_bind_group, params_buffer) =
         shading_model.create_uniform(device);
 
+    let (vertex_buffer, vertex_count, mut texture_view, mut texture_sampler) = 
+        crate::object::Object::load_obj(render_state, path);
+
+    if texture_view.is_none() {
+        let img_bytes = include_bytes!("proxy-image.jpg");
+        let img = image::load_from_memory(img_bytes).unwrap();
+        let rgba = img.to_rgba8();
+        let size = wgpu::Extent3d {
+            width: rgba.width(),
+            height: rgba.height(),
+            depth_or_array_layers: 1,
+        };
+        let texture = render_state.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        render_state.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba, 
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * rgba.width()),
+                rows_per_image: Some(rgba.height()),
+            },
+            size
+        );
+        texture_view = Some(texture.create_view(&wgpu::TextureViewDescriptor::default()));
+        texture_sampler = Some(render_state.device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        }));
+    }
+
+    let texture_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    // This should match the filterable field of the
+                    // corresponding Texture entry above.
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        });
+
+    let texture_bind_group = device.create_bind_group(
+        &wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view.as_ref().unwrap()),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture_sampler.as_ref().unwrap()),
+                }
+            ],
+            label: Some("diffuse_bind_group"),
+        }
+    );
+
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[
             &camera_bind_group_layout,
             &light_bind_group_layout,
             &params_bind_group_layout,
+            &texture_bind_group_layout,
         ],
         push_constant_ranges: &[],
     });
@@ -75,9 +167,8 @@ pub fn build_pipeline(
         cache: None,
     });
 
-    let (vertex_buffer, vertex_count) = crate::object::Object::load_obj(render_state, path);
+    
 
-    crate::object::Object::load_obj(render_state, path);
     render_state
         .renderer
         .write()
@@ -93,6 +184,9 @@ pub fn build_pipeline(
             vertex_buffer,
             vertex_count,
             post_process_resources: None,
+            _model_texture_view: texture_view.unwrap(),
+            _model_texture_sampler: texture_sampler.unwrap(),
+            model_texture_bind_group: texture_bind_group
         });
 }
 
@@ -461,6 +555,7 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             pass.set_bind_group(0, &resources.camera_bind_group, &[]);
             pass.set_bind_group(1, &resources.light_bind_group, &[]);
             pass.set_bind_group(2, &resources.params_bind_group, &[]);
+            pass.set_bind_group(3, &resources.model_texture_bind_group, &[]);
             pass.set_vertex_buffer(0, resources.vertex_buffer.slice(..));
             pass.draw(0..resources.vertex_count, 0..1);
             drop(pass);
@@ -515,6 +610,9 @@ pub struct ObjectRenderResources {
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
     post_process_resources: Option<PostProcessResources>,
+    _model_texture_view: wgpu::TextureView,
+    _model_texture_sampler: wgpu::Sampler,
+    model_texture_bind_group: wgpu::BindGroup,
 }
 
 impl ObjectRenderResources {

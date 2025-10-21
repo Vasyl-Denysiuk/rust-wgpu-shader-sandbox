@@ -21,6 +21,11 @@ struct Phong {
 @group(2) @binding(0)
 var<uniform> phong: Phong;
 
+@group(3) @binding(0)
+var texture: texture_2d<f32>;
+@group(3) @binding(1)
+var t_sampler: sampler;
+
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -54,6 +59,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let v = normalize(-in.world_position);
     let r = reflect(-l, in.world_normal);
     let spec = pow(max(0.0, dot(v, r)), phong.alph);
-    let color = light.color * (phong.ka + phong.kd*diff + phong.ks*spec);
-    return vec4<f32>(color, 1.0);
+    let base = textureSample(texture, t_sampler, in.texcoord);
+    let color = base.rgb * light.color * (phong.ka + phong.kd*diff + phong.ks*spec);
+    return vec4<f32>(color, base.a);
 }
