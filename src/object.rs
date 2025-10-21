@@ -2,6 +2,7 @@ use eframe::egui_wgpu::wgpu::util::DeviceExt as _;
 
 const DEFAULT_OBJECT_PATH: &str = "./objects/test1.obj";
 
+use egui::text;
 use egui_file::FileDialog;
 use std::{
     ffi::OsStr,
@@ -14,20 +15,6 @@ use crate::renderer::ObjectRenderResources;
 pub struct Object {
     pub opened_file: Option<PathBuf>,
     open_file_dialog: Option<FileDialog>,
-}
-
-pub struct Material {
-    pub name: String,
-    pub diffuse_texture: eframe::egui_wgpu::Texture,
-    pub bind_group: eframe::wgpu::BindGroup,
-}
-
-pub struct Mesh {
-    pub name: String,
-    pub vertex_buffer: eframe::wgpu::Buffer,
-    pub index_buffer: eframe::wgpu::Buffer,
-    pub num_elements: u32,
-    pub material: usize,
 }
 
 impl Object {
@@ -48,7 +35,8 @@ impl Object {
 
         if let Ok(mat) = obj_materials {
             if let Some(texture_path) = &mat[0].diffuse_texture {
-                todo!()
+                let img = image::ImageReader::open(texture_path).unwrap().decode().unwrap();
+                
             }
         }
 

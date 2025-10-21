@@ -1,3 +1,7 @@
+const red_offset = vec2<f32>(0.005, 0.0);
+const blue_offset = vec2<f32>(-0.005, 0.0);
+const green_offset = vec2<f32>(0.005, 0.0);
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
@@ -19,6 +23,9 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(post_texture, post_sampler, in.uv);
-    return vec4<f32>(color.rgb, color.a);
+    let test = vec2<f32>(1.0, 1.0);
+    let red = textureSample(post_texture, post_sampler, in.uv + red_offset).r;
+    let green = textureSample(post_texture, post_sampler, in.uv + green_offset).g;
+    let blue_a = textureSample(post_texture, post_sampler, in.uv + blue_offset).ba;
+    return vec4<f32>(red, green, blue_a);
 }

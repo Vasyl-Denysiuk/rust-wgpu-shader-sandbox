@@ -58,12 +58,18 @@ pub fn build_pipeline(
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Cw,
-            cull_mode: Some(wgpu::Face::Back),
+            cull_mode: None,
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
         cache: None,
@@ -91,12 +97,52 @@ pub fn build_pipeline(
 }
 
 pub struct PostProcessResources {
+    depth_texture_view: wgpu::TextureView,
+    _depth_sampler: wgpu::Sampler,
+    target_format: wgpu::TextureFormat,
     texture_view_a: wgpu::TextureView,
     texture_view_b: wgpu::TextureView,
     bind_group_a: wgpu::BindGroup,
     bind_group_b: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    out: PostProcessTexture,
+}
+
+#[derive(Clone, Copy)]
+enum PostProcessTexture {
+    A,
+    B,
+}
+
+impl PostProcessResources {
+    fn swap_buffers(&mut self) {
+        self.out = match self.out {
+            PostProcessTexture::A => PostProcessTexture::B,
+            PostProcessTexture::B => PostProcessTexture::A,
+        };
+    }
+    
+    fn get_texture_out_view(&self) -> &wgpu::TextureView {
+        match self.out {
+            PostProcessTexture::A => &self.texture_view_a,
+            PostProcessTexture::B => &self.texture_view_b,
+        }
+    }
+    
+    fn get_bind_group_in(&self) -> &wgpu::BindGroup {
+        match self.out {
+            PostProcessTexture::A => &self.bind_group_b,
+            PostProcessTexture::B => &self.bind_group_a,
+        }
+    }
+
+    pub fn get_final_bind_group(&self) -> &wgpu::BindGroup {
+        match self.out {
+            PostProcessTexture::A => &self.bind_group_a,
+            PostProcessTexture::B => &self.bind_group_b,
+        }
+    }
 }
 
 pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32)) {
@@ -123,9 +169,26 @@ pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32))
         view_formats: &[target_format],
     };
 
+    let depth_desc = &wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth32Float,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    };
+
     let texture_a = device.create_texture(tex_desc);
     let texture_b = device.create_texture(tex_desc);
+    let depth_texture = device.create_texture(depth_desc);
 
+    let depth_texture_view = depth_texture.create_view(&Default::default());
     let texture_view_a = texture_a.create_view(&Default::default());
     let texture_view_b = texture_b.create_view(&Default::default());
 
@@ -138,6 +201,21 @@ pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32))
         mipmap_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
     });
+
+    let _depth_sampler = device.create_sampler(
+        &wgpu::SamplerDescriptor { // 4.
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: Some(wgpu::CompareFunction::LessEqual), // 5.
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 100.0,
+            ..Default::default()
+        }
+    );
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[
@@ -243,12 +321,16 @@ pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32))
     });
 
     let post_process_resources = PostProcessResources {
+        depth_texture_view,
+        _depth_sampler,
+        target_format,
         texture_view_a,
         texture_view_b,
         bind_group_a,
         bind_group_b,
         pipeline,
         vertex_buffer,
+        out: PostProcessTexture::A,
     };
 
     render_state
@@ -260,8 +342,69 @@ pub fn post_effect_init(render_state: &egui_wgpu::RenderState, size: (u32, u32))
         .set_post_process_resources(post_process_resources);
 }
 
-pub fn add_post_effect(render_state: &egui_wgpu::RenderState) {
+pub fn create_post_pipeline(device: &wgpu::Device, target_format: wgpu::TextureFormat, src: String) ->wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(src.into()),
+    });
 
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+        label: None,
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
+    });
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[PostVertex::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(target_format.into())],
+            compilation_options: PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Cw,
+            cull_mode: Some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
 }
 
 pub struct ObjectRenderCallback {
@@ -280,7 +423,7 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
         _egui_encoder: &mut wgpu::CommandEncoder,
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        let resources: &ObjectRenderResources = resources.get().unwrap();
+        let resources = resources.get_mut::<ObjectRenderResources>().unwrap();
         resources.prepare(
             device,
             queue,
@@ -288,19 +431,26 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             &self.light,
             self.shading_model.clone(),
         );
-        if let Some(post) = &resources.post_process_resources {
+        if let Some(post) = &mut resources.post_process_resources {
             let mut encoder = device.create_command_encoder(&Default::default());
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &post.texture_view_a,
+                    view: &post.get_texture_out_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &post.depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
@@ -312,6 +462,30 @@ impl egui_wgpu::CallbackTrait for ObjectRenderCallback {
             pass.set_vertex_buffer(0, resources.vertex_buffer.slice(..));
             pass.draw(0..resources.vertex_count, 0..1);
             drop(pass);
+            
+            for post_effect in self.post_effects.iter() {
+                let mut post_guard = post_effect.lock().unwrap();
+                let post_effect_pipeline = post_guard.get_pipeline(device, post.target_format);
+                post.swap_buffers();
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: post.get_texture_out_view(),
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                pass.set_pipeline(post_effect_pipeline);
+                pass.set_bind_group(0, post.get_bind_group_in(), &[]);
+                pass.set_vertex_buffer(0, post.vertex_buffer.slice(..));
+                pass.draw(0..6, 0..1);
+            }
             queue.submit([encoder.finish()]);
         }
         Vec::new()
@@ -359,11 +533,7 @@ impl ObjectRenderResources {
         light: &LightUniform,
         params: Arc<Mutex<dyn ShadingModel + Send>>,
     ) {
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[*view_projection]),
-        );
+        queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[*view_projection]));
         queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[*light]));
         queue.write_buffer(&self.params_buffer, 0, params.lock().unwrap().to_params());
     }

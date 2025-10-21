@@ -27,17 +27,10 @@ impl App {
             shader_conf: config::ShaderConfig {
                 active_model: Arc::new(Mutex::new(config::phong::Phong::new())),
                 active_post_effects: Vec::new(),
+                selected_effect: None,
             },
             viewport_size: None,
         })
-    }
-
-    fn reload_shader(&self, render_state: &egui_wgpu::RenderState) {
-        renderer::build_pipeline(
-            render_state,
-            &self.object.opened_file.as_deref(),
-            &*(self.shader_conf.active_model).lock().unwrap(),
-        );
     }
 }
 
@@ -110,17 +103,61 @@ impl eframe::App for App {
                     config::ShadingModelEnum::Flat => Arc::new(Mutex::new(crate::config::flat::Flat::new())),
                 }
             }
-            if self
-                .shader_conf
+            self.shader_conf
                 .active_model
                 .lock()
                 .unwrap()
-                .build_widget(ui)
-            {
-                if let Some(rs) = frame.wgpu_render_state() {
-                    self.reload_shader(rs);
-                }
-            }
+                .build_widget(ui);
+
+            ui.add_space(20.0);
+            ui.label("Active post processing effects");
+            ui.vertical(|ui| {
+                egui::Frame::group(ui.style()).show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false; 2])
+                        .stick_to_bottom(false)
+                        .max_height(100.0)
+                        .show(ui, |ui| {
+                            self.shader_conf.active_post_effects
+                                .retain(|effect| {
+                                let mut retain = true;
+                                ui.horizontal(|ui| {
+                                    ui.label(effect.lock().unwrap().as_enum().to_string());
+                                    ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
+                                        if ui.button("[X]").clicked() {
+                                            retain = false;
+                                        }
+                                    })
+                                });
+                                retain
+                            });
+                        });
+                });
+                ui.horizontal(|ui| {
+                    let current = &mut self.shader_conf.selected_effect.unwrap_or(config::PostEffectEnum::Negative);
+                    egui::ComboBox::from_label("Add post processing effect!")
+                        .selected_text(format!(
+                            "{:?}",
+                            current
+                        ))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(current, config::PostEffectEnum::Negative, "Negative");
+                            ui.selectable_value(current, config::PostEffectEnum::ChromaticAberration, "ChromaticAberration");
+                            ui.selectable_value(current, config::PostEffectEnum::Blur, "Blur");
+                        });
+                    let active = &self.shader_conf.selected_effect;
+                    if active.is_none() || current != &active.unwrap() {
+                        self.shader_conf.selected_effect = Some(*current);
+                    }
+                    if ui.button("[+]").clicked() {
+                        self.shader_conf.active_post_effects.push(match current {
+                            config::PostEffectEnum::Negative => Arc::new(Mutex::new(crate::config::negative::Negative::new())),
+                            config::PostEffectEnum::ChromaticAberration => Arc::new(Mutex::new(crate::config::chromatic::ChromaticAberration::new())),
+                            config::PostEffectEnum::Blur => Arc::new(Mutex::new(crate::config::blur::Blur::new())),
+                        });
+                    }
+                });
+            });
             if self.object.build_widget(ui, ctx) {
                 if let Some(rs) = frame.wgpu_render_state() {
                     object::Object::update_obj(rs, &self.object.opened_file.as_deref());

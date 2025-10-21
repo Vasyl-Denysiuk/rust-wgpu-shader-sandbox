@@ -20,5 +20,5 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(post_texture, post_sampler, in.uv);
-    return vec4<f32>(color.rgb, color.a);
+    return vec4<f32>(1.0 - color.rgb, color.a);
 }
